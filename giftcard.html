@@ -79,6 +79,23 @@
   .row .amt{margin-left:auto;font-weight:850;font-size:14px;font-variant-numeric:tabular-nums;} .amt.pos{color:var(--accent);} .amt.neg{color:var(--ink);}
   .row .go{margin-left:auto;background:var(--okbg);color:var(--accent2);border:none;border-radius:9px;padding:8px 13px;font-weight:800;font-size:13px;}
   .empty{color:var(--faint);font-size:13px;padding:16px 2px;}
+  .tbl{width:100%;border-collapse:collapse;font-size:14px;}
+  .tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);font-weight:800;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .tbl td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  .tbl tr:last-child td{border-bottom:none;}
+  .tbl tbody tr:hover td{background:var(--surface);}
+  .tnum{font-variant-numeric:tabular-nums;}
+  .right{text-align:right;}
+  .pill2{display:inline-block;font-size:11px;font-weight:800;padding:3px 9px;border-radius:7px;white-space:nowrap;}
+  .pill2.on{background:var(--okbg);color:var(--accent2);} .pill2.off{background:#fdecec;color:#b91c1c;}
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .ministat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 16px;}
+  .ministat .k{font-size:12px;color:var(--muted);font-weight:650;display:flex;align-items:center;gap:7px;}
+  .ministat .k svg{width:15px;height:15px;stroke:var(--accent);}
+  .ministat .v{font-size:24px;font-weight:850;letter-spacing:-.5px;margin-top:5px;} .ministat.green .v{color:var(--accent);}
+  .srow{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--line);} .srow:last-child{border-bottom:none;}
+  .srch{width:100%;padding:10px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;margin-bottom:6px;background:#fff;}
+  .srch:focus{outline:none;border-color:var(--accent);}
 
   .flabel{font-size:12.5px;font-weight:750;color:#3a463f;display:block;margin-top:8px;}
   .fld{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;margin:5px 0 12px;background:#fff;color:var(--ink);}
@@ -144,6 +161,8 @@
   const prog=()=>(ME&&ME.program)||{};
   const brand=()=>prog().programName||"Shuk Gift";
   const store=()=>prog().storeName||"Shuk";
+  const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const escAttr=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
   function toast(m){const t=$("toast");t.innerHTML=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",3600);}
   let clerkActive=false, ME=null, page="home", PREVIEW=null, selectedCard=null;
 
@@ -195,13 +214,17 @@
 
   function buildNav(){
     const gear='<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>';
+    const people='<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5.2a3 3 0 0 1 0 5.6M22 20a6.5 6.5 0 0 0-4.5-6.2"/>';
+    const shop='<path d="M3 9l1.2-5h15.6L21 9M4 9v11h16V9M4 9h16M9.5 20v-6h5v6"/>';
+    const act='<path d="M3 12h4l3 8 4-16 3 8h4"/>';
+    const cardIc='<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>';
     let items;
     if(ME.role==="customer"){
-      items=[["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']];
+      items=[["home","My card",cardIc],["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],["activity","Activity",act],["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']];
+    } else if(ME.role==="admin"){
+      items=[["home","Overview",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["stores","Stores",shop],["customers","Customers",people],["activity","Transactions",act],["program","Settings",gear]];
     } else {
-      // store + admin share the operations nav; admin also gets Settings.
-      items=[["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Transactions",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']];
-      if(ME.role==="admin") items.push(["program","Settings",gear]);
+      items=[["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",cardIc],["activity","Transactions",act]];
     }
     const mk=(id,label,svg,cls)=>'<button class="'+(page===id?cls:"")+'" data-go="'+id+'"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+svg+'</svg>'+label+'</button>';
     $("nav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
@@ -210,7 +233,7 @@
   document.body.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g){ page=g.getAttribute("data-go"); buildNav(); render(); } });
 
   /* ---------- Render ---------- */
-  const titles={home:ME=>ME.role==="admin"?"Platform overview":ME.role==="store"?"Store dashboard":"My card",checkout:()=>"Charge a card",customers:()=>"Gift cards",activity:ME=>ME.role!=="customer"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
+  const titles={home:ME=>ME.role==="admin"?"Platform overview":ME.role==="store"?"Store dashboard":"My card",checkout:()=>"Charge a card",customers:ME=>ME.role==="admin"?"Customers":"Gift cards",stores:()=>"Stores",activity:ME=>ME.role!=="customer"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
   function txLabel(t){
     const c=t.cat||"", pos=(t.amount||0)>0;
     if(c.indexOf("ach")>=0) return pos?"Bank transfer":"Bank withdrawal";
@@ -235,7 +258,8 @@
   function render(){
     $("pageTitle").textContent=(titles[page]||(()=>"Shuk Gift"))(ME);
     const s=$("scroll");
-    if(ME.role!=="customer") return renderMerchant(s);
+    if(ME.role==="admin") return renderAdmin(s);
+    if(ME.role==="store") return renderMerchant(s);
     return renderCustomer(s);
   }
 
@@ -303,6 +327,93 @@
         '<p class="note">Show this card number at the register to pay with your '+store()+' store credit. Store credit isn’t transferable and can’t be cashed out. You earn '+(prog().rewardsPercent||0)+'% back — redeem points for credit on the Rewards page.</p></div></div>';
     $("mgBtn").addEventListener("click",()=>{ try{ if(window.Clerk&&Clerk.openUserProfile){ Clerk.openUserProfile(); } else { toast("Profile management isn’t available."); } }catch(e){ toast("Profile management isn’t available."); } });
     $("soBtn").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
+  }
+
+  /* ----- Admin: platform console ----- */
+  function renderAdmin(s){
+    const st=ME.stats||{}, cards=ME.cards||[], stores=ME.stores||[], txns=ME.transactions||[];
+    if(page==="preview" && PREVIEW){ renderPreview(s); return; }
+    if(page==="stores"){ renderStores(s,stores); return; }
+    if(page==="customers"){ renderCustomers(s,cards); return; }
+    if(page==="program"){ renderProgram(s); return; }
+    if(page==="activity"){
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">All transactions</h3><span class="note" style="margin:0">'+txns.length+' record'+(txns.length===1?"":"s")+'</span></div><div class="list">'+(txns.length?txns.map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
+      return;
+    }
+    // Overview
+    const kpi=(k,v,svg,green)=>'<div class="ministat'+(green?" green":"")+'"><div class="k"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+svg+'</svg>'+k+'</div><div class="v">'+v+'</div></div>';
+    s.innerHTML=
+      '<div class="kpi">'+
+        kpi("Funds held",fmt(st.fundsHeld||0),'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',true)+
+        kpi("Points issued",(st.pointsIssued||0).toLocaleString(),'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>',true)+
+        kpi("Customers",(st.customerCount||0).toLocaleString(),'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/>')+
+        kpi("Active cards",(st.activeCards||0).toLocaleString(),'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>')+
+        kpi("Stores",(st.storeCount||0).toLocaleString(),'<path d="M3 9l1.2-5h15.6L21 9M4 9v11h16V9"/>')+
+      '</div>'+
+      '<div style="margin:14px 0 2px"><span class="badge" style="background:'+(ME.posConnected?"var(--okbg)":"#fdecec")+';color:'+(ME.posConnected?"var(--accent2)":"#b91c1c")+'">● Store POS '+(ME.posConnected?"connected":"not connected")+'</span></div>'+
+      '<div class="grid2" style="margin-top:14px;align-items:start">'+
+        '<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent transactions</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,7).map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>'+
+        '<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Stores</h3><button class="go" data-go="stores" style="background:var(--surface);color:var(--ink)">Manage</button></div><div class="list">'+(stores.length?stores.map(x=>'<div class="srow"><div class="ic" style="width:34px;height:34px;border-radius:9px;background:var(--okbg);display:grid;place-items:center;flex:none"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.2-5h15.6L21 9M4 9v11h16V9"/></svg></div><div style="min-width:0"><div class="nm">'+esc(x.name)+'</div><div class="dt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.email)+'</div></div><span class="pill2 '+(x.active?"on":"off")+'" style="margin-left:auto">'+x.rewardsPercent+'% back</span></div>').join(""):'<div class="empty">No stores yet. Add one under Stores.</div>')+'</div></div>'+
+      '</div>';
+  }
+  function renderPreview(s){
+    const p=PREVIEW, pt=p.transactions||[];
+    s.innerHTML=
+      '<button class="btn sub" id="pvBack" style="width:auto;margin-bottom:14px">← Back</button>'+
+      '<p class="note" style="margin:0 0 14px">This is exactly what <b>'+esc(p.email)+'</b> sees in their app.</p>'+
+      '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Worth '+fmt(p.points||0)+'.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(p.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
+      '<div class="grid2"><div>'+
+        '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">'+brand()+'</span><span class="tag">STORE CREDIT</span></div>'+
+        '<div class="lbl">Card balance</div><div class="bal">'+fmt(p.balance)+'</div>'+
+        '<div style="margin-top:18px;font-size:16px;letter-spacing:2px;font-variant-numeric:tabular-nums;font-weight:700">'+fmtCard(p.cardNumber)+'</div>'+
+        '<div class="foot"><span>'+esc((p.email||"").toUpperCase())+'</span><span>'+esc(brand().toUpperCase())+'</span></div></div>'+
+      '</div><div class="block"><h3>Recent activity</h3><div class="list">'+(pt.length?pt.slice(0,8).map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div></div>';
+    $("pvBack").addEventListener("click",()=>{ PREVIEW=null; page="customers"; buildNav(); render(); });
+  }
+  function renderStores(s,stores){
+    s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px"><div><h3 style="margin:0">Stores ('+stores.length+')</h3><span class="note" style="margin:0">Each store earns its customers its own rewards rate.</span></div><button class="btn pri" id="addStore" style="width:auto;padding:9px 14px;font-size:13px;white-space:nowrap">+ Add store</button></div>'+
+      (stores.length?'<table class="tbl"><thead><tr><th>Store</th><th>Login email</th><th class="right">Rewards</th><th>Status</th><th></th></tr></thead><tbody>'+stores.map(x=>'<tr><td><b>'+esc(x.name)+'</b>'+(x.note?'<div class="dt">'+esc(x.note)+'</div>':'')+'</td><td class="tnum" style="color:var(--muted)">'+esc(x.email)+'</td><td class="right tnum"><b>'+x.rewardsPercent+'%</b></td><td><span class="pill2 '+(x.active?"on":"off")+'">'+(x.active?"Active":"Inactive")+'</span></td><td class="right"><button class="go editStore" data-email="'+escAttr(x.email)+'" style="background:var(--surface);color:var(--ink)">Edit</button></td></tr>').join("")+'</tbody></table>':'<div class="empty">No stores yet. Add your first store to set its rewards rate and give it a login.</div>')+'</div>';
+    $("addStore").addEventListener("click",()=>openStore(null));
+    s.querySelectorAll(".editStore").forEach(b=>b.addEventListener("click",()=>{ const em=b.getAttribute("data-email"); openStore(stores.find(x=>x.email===em)||null); }));
+  }
+  function renderCustomers(s,cards){
+    s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px"><div><h3 style="margin:0">Customers ('+cards.length+')</h3><span class="note" style="margin:0">Every cardholder, balance, and points total.</span></div><button class="btn pri" id="issueBtn2" style="width:auto;padding:9px 14px;font-size:13px;white-space:nowrap">+ Issue / load</button></div>'+
+      '<input class="srch" id="custSearch" placeholder="Search by email…" /><div id="custTbl"></div></div>';
+    const draw=(q)=>{
+      const f=cards.filter(c=>!q||(c.email||"").toLowerCase().includes(q));
+      const tot=f.reduce((a,c)=>a+(c.balance||0),0);
+      $("custTbl").innerHTML=(f.length?'<table class="tbl"><thead><tr><th>Customer</th><th>Card</th><th class="right">Balance</th><th class="right">Points</th><th></th></tr></thead><tbody>'+f.map(c=>'<tr><td>'+esc(c.email)+'</td><td class="tnum" style="color:var(--muted)">'+fmtCard(c.cardNumber)+'</td><td class="right tnum"><b>'+fmt(c.balance)+'</b></td><td class="right tnum">'+(c.points||0).toLocaleString()+'</td><td class="right"><button class="go viewCust" data-id="'+c.id+'" style="background:var(--surface);color:var(--ink)">View</button></td></tr>').join("")+'</tbody><tfoot><tr><td style="font-weight:800;border-top:2px solid var(--line)">Total ('+f.length+')</td><td style="border-top:2px solid var(--line)"></td><td class="right tnum" style="font-weight:850;border-top:2px solid var(--line)">'+fmt(tot)+'</td><td colspan="2" style="border-top:2px solid var(--line)"></td></tr></tfoot></table>':'<div class="empty">No customers'+(q?' match that search':' yet')+'.</div>');
+      $("custTbl").querySelectorAll(".viewCust").forEach(b=>b.addEventListener("click",async()=>{ b.disabled=true; b.innerHTML='<span class="spin"></span>'; const snap=await api("customerSnapshot",{cardId:b.getAttribute("data-id")}); if(snap&&snap.email){ PREVIEW=snap; page="preview"; buildNav(); render(); } else { toast(snap&&snap.error?snap.error:"Could not load."); b.disabled=false; b.textContent="View"; } }));
+    };
+    draw("");
+    $("custSearch").addEventListener("input",e=>draw(e.target.value.trim().toLowerCase()));
+    $("issueBtn2").addEventListener("click",openIssue);
+  }
+  function openStore(ex){
+    const editing=!!(ex&&ex.email);
+    const e=ex||{};
+    const {el,close}=sheet('<h3>'+(editing?"Edit store":"Add store")+'</h3><p class="sub">Set the store login and its rewards rate.</p>'+
+      '<label class="flabel">Store name</label><input class="fld" id="sName" value="'+escAttr(e.name||"")+'" placeholder="e.g. Shuk Midtown" />'+
+      '<label class="flabel">Login email</label><input class="fld" id="sEmail" type="email" value="'+escAttr(e.email||"")+'" placeholder="store@email.com" '+(editing?"disabled":"")+' />'+
+      '<label class="flabel">Rewards rate — % back as points</label><input class="fld" id="sRew" type="number" min="0" max="25" step="0.5" value="'+(e.rewardsPercent!=null?e.rewardsPercent:(prog().rewardsPercent||1))+'" />'+
+      '<label class="flabel">Note (optional)</label><input class="fld" id="sNote" value="'+escAttr(e.note||"")+'" placeholder="Location, manager, etc." />'+
+      '<label style="display:flex;align-items:center;gap:9px;margin:2px 0 14px;font-size:13.5px;font-weight:650;cursor:pointer"><input type="checkbox" id="sActive" '+(e.active===false?"":"checked")+' /> Active — can sign in and charge cards</label>'+
+      '<button class="btn pri" id="sSave">'+(editing?"Save store":"Add store")+'</button>'+
+      (editing?'<button class="btn sub" id="sRemove" style="width:100%;margin-top:8px;color:#b91c1c">Remove store</button>':'')+
+      '<button class="btn sub" id="sCancel" style="width:100%;margin-top:8px">Cancel</button>');
+    el.querySelector("#sCancel").addEventListener("click",close);
+    el.querySelector("#sSave").addEventListener("click",async()=>{
+      const email=editing?e.email:(el.querySelector("#sEmail").value||"").trim().toLowerCase();
+      const nm=(el.querySelector("#sName").value||"").trim();
+      const storeObj={ name:nm, rewardsPercent:parseFloat(el.querySelector("#sRew").value)||0, note:el.querySelector("#sNote").value, active:el.querySelector("#sActive").checked };
+      if(!/.+@.+\..+/.test(email)){ toast("Enter a valid store email."); return; }
+      if(!nm){ toast("Enter a store name."); return; }
+      const g=el.querySelector("#sSave"); g.disabled=true; g.innerHTML='<span class="spin"></span>';
+      const r=await api("setStore",{email,store:storeObj});
+      if(r&&r.ok){ ME.stores=r.stores; close(); toast("Store saved."); render(); } else { toast(r&&r.error?r.error:"Could not save store."); g.disabled=false; g.textContent=editing?"Save store":"Add store"; }
+    });
+    const rm=el.querySelector("#sRemove");
+    if(rm) rm.addEventListener("click",async()=>{ const g=rm; g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("removeStore",{email:e.email}); if(r&&r.ok){ ME.stores=r.stores; close(); toast("Store removed."); render(); } else { toast(r&&r.error?r.error:"Could not remove."); g.disabled=false; g.textContent="Remove store"; } });
   }
 
   /* ----- Merchant ----- */
