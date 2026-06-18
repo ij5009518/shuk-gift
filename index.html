@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a3527" />
+<title>Shuk Gift — The store credit that pays you back</title>
+<meta name="description" content="Load your Shuk card, earn rewards on every purchase, and set auto top-up so you never run out. Store credit that pays you back — not the banks." />
+<meta property="og:title" content="Shuk Gift — store credit that pays you back" />
+<meta property="og:description" content="Load $100, shop with $110. Earn rewards on every visit. Auto top-up keeps you funded." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#06231a; --ink:#0a1713; --muted:#5a6b64; --faint:#93a49c;
+    --accent:#0e9f6e; --accent2:#0b855c; --mint:#e7f6ef; --mint2:#d7f0e4;
+    --gold:#e4b94a; --line:#e2eae6; --line2:#d6e1db; --surface:#fff;
+    --card1:#0a3527; --card2:#10543d;
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --display:'Sora','Inter',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{font-family:var(--font);color:var(--ink);background:#fff;-webkit-font-smoothing:antialiased;line-height:1.55;}
+  a{color:inherit;text-decoration:none;}
+  svg{display:block;}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 24px;}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:13px;padding:14px 22px;font-weight:800;font-size:15px;font-family:var(--font);cursor:pointer;transition:.16s;}
+  .btn.pri{background:linear-gradient(135deg,#15a86f,#0b855c);color:#fff;box-shadow:0 12px 28px -12px rgba(14,159,110,.8);}
+  .btn.pri:hover{transform:translateY(-2px);filter:brightness(1.05);}
+  .btn.light{background:#fff;color:var(--card1);} .btn.light:hover{transform:translateY(-2px);}
+  .btn.ghost{background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.25);} .btn.ghost:hover{background:rgba(255,255,255,.18);}
+  .btn.dark{background:var(--card1);color:#fff;} .btn.dark:hover{transform:translateY(-2px);}
+  .brand{display:inline-flex;align-items:center;gap:11px;font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.4px;}
+  .mark{width:36px;height:36px;border-radius:11px;background:linear-gradient(140deg,#15a06f,#0b3b2e);display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:800;font-size:18px;box-shadow:0 6px 16px -6px rgba(14,159,110,.7), inset 0 1px 0 rgba(255,255,255,.25);}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
+
+  /* ---------- Nav ---------- */
+  header.nav{position:sticky;top:0;z-index:40;backdrop-filter:saturate(160%) blur(12px);background:rgba(6,35,26,.72);border-bottom:1px solid rgba(255,255,255,.08);}
+  header.nav .wrap{display:flex;align-items:center;gap:20px;padding-top:15px;padding-bottom:15px;}
+  header.nav .brand{color:#fff;}
+  header.nav nav{margin-left:auto;display:flex;align-items:center;gap:26px;}
+  header.nav nav a{color:rgba(255,255,255,.82);font-weight:600;font-size:14.5px;transition:.14s;}
+  header.nav nav a:hover{color:#fff;}
+  .nlink{display:none;}
+  @media(min-width:840px){.nlink{display:inline;}}
+
+  /* ---------- Hero ---------- */
+  .hero{position:relative;color:#fff;overflow:hidden;
+    background:radial-gradient(130% 110% at 82% -10%,#1c7a57 0%,#0c3527 52%,#06231a 100%);}
+  .hero::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(520px 520px at 12% 92%, rgba(63,211,154,.20), transparent 60%),
+              radial-gradient(420px 420px at 95% 8%, rgba(228,185,74,.14), transparent 60%);}
+  .hero .wrap{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center;padding:70px 24px 86px;}
+  .hero .eyebrow{color:#7ef0bf;}
+  .hero h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,5vw,56px);line-height:1.04;letter-spacing:-1.5px;margin:16px 0 0;}
+  .hero h1 .hl{background:linear-gradient(120deg,#7ef0bf,#e4b94a);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .hero p.lead{font-size:18px;color:rgba(255,255,255,.86);margin:18px 0 28px;max-width:540px;}
+  .hero .cta{display:flex;gap:12px;flex-wrap:wrap;}
+  .hero .trust{display:flex;gap:22px;flex-wrap:wrap;margin-top:26px;color:rgba(255,255,255,.78);font-size:13px;font-weight:600;}
+  .hero .trust span{display:flex;align-items:center;gap:7px;} .hero .trust svg{width:16px;height:16px;stroke:#7ef0bf;}
+  @media(max-width:840px){.hero .wrap{grid-template-columns:1fr;gap:36px;padding:48px 24px 60px;}}
+
+  /* ---------- Gift card visual ---------- */
+  .cardstage{position:relative;perspective:1500px;display:grid;place-items:center;min-height:300px;}
+  .gc{position:relative;width:min(420px,86vw);aspect-ratio:1.586/1;border-radius:24px;padding:26px;color:#fff;overflow:hidden;
+    background:radial-gradient(150% 130% at 88% -10%,#23966c 0%,#10543d 42%,#0a3527 100%);
+    box-shadow:0 40px 80px -30px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.12);
+    transform:rotateY(-14deg) rotateX(7deg);animation:float 7s ease-in-out infinite;transform-style:preserve-3d;}
+  @keyframes float{0%,100%{transform:rotateY(-14deg) rotateX(7deg) translateY(0);}50%{transform:rotateY(-9deg) rotateX(5deg) translateY(-12px);}}
+  .gc .mesh{position:absolute;inset:0;background:radial-gradient(130px 130px at 16% 86%, rgba(63,211,154,.4),transparent 60%),radial-gradient(160px 160px at 96% 8%, rgba(228,185,74,.22),transparent 60%);}
+  .gc .grain{position:absolute;inset:0;opacity:.5;mix-blend-mode:overlay;background-image:radial-gradient(rgba(255,255,255,.18) 1px,transparent 1px);background-size:7px 7px;}
+  .gc::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.22) 48%,transparent 60%);background-size:280% 280%;animation:shine 5s ease-in-out infinite;}
+  @keyframes shine{0%,70%{background-position:140% 0;}88%,100%{background-position:-40% 0;}}
+  .gc>*{position:relative;}
+  .gc .r1{display:flex;justify-content:space-between;align-items:flex-start;}
+  .gc .r1 .nm{font-family:var(--display);font-weight:800;font-size:17px;display:flex;align-items:center;gap:8px;}
+  .gc .r1 .nm .dot{width:24px;height:24px;border-radius:8px;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:13px;font-weight:800;}
+  .gc .chip{width:46px;height:34px;border-radius:7px;margin-top:20px;background:linear-gradient(135deg,#f4dd9a,#d6b35f 55%,#b8923f);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);position:relative;}
+  .gc .chip::before{content:"";position:absolute;inset:6px 9px;border:1px solid rgba(120,80,20,.45);border-radius:3px;}
+  .gc .lbl{margin-top:16px;font-size:11px;opacity:.75;letter-spacing:.5px;text-transform:uppercase;font-weight:700;}
+  .gc .bal{font-family:var(--display);font-size:38px;font-weight:800;letter-spacing:-1px;line-height:1;margin-top:2px;}
+  .gc .num{margin-top:16px;font-size:17px;letter-spacing:3px;font-weight:600;}
+  .gc .foot{display:flex;justify-content:space-between;margin-top:16px;font-size:11px;opacity:.82;letter-spacing:.6px;font-weight:600;}
+  .floatchip{position:absolute;background:#fff;color:var(--ink);border-radius:14px;padding:11px 14px;box-shadow:0 20px 40px -18px rgba(0,0,0,.5);display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;animation:float2 6s ease-in-out infinite;}
+  .floatchip .ic{width:30px;height:30px;border-radius:9px;background:var(--mint);display:grid;place-items:center;flex:none;} .floatchip .ic svg{width:17px;height:17px;stroke:var(--accent);}
+  .floatchip .sm{font-size:11px;color:var(--muted);font-weight:600;}
+  .fc1{top:8%;left:-4%;animation-delay:.4s;} .fc2{bottom:6%;right:-4%;animation-delay:1.4s;}
+  @keyframes float2{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
+  @media(max-width:520px){.fc1{left:0;} .fc2{right:0;}}
+
+  /* ---------- Marquee strip ---------- */
+  .strip{background:var(--card1);color:rgba(255,255,255,.9);}
+  .strip .wrap{display:flex;flex-wrap:wrap;gap:14px 40px;justify-content:center;padding:18px 24px;font-weight:700;font-size:14px;}
+  .strip span{display:flex;align-items:center;gap:9px;opacity:.92;} .strip svg{width:16px;height:16px;stroke:#7ef0bf;}
+
+  /* ---------- Sections ---------- */
+  section{padding:84px 0;}
+  .sec-head{text-align:center;max-width:680px;margin:0 auto 50px;}
+  .sec-head .eyebrow{color:var(--accent2);}
+  .sec-head h2{font-family:var(--display);font-weight:800;font-size:clamp(27px,3.4vw,40px);letter-spacing:-1px;margin:12px 0 0;}
+  .sec-head p{font-size:17px;color:var(--muted);margin-top:14px;}
+
+  .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;}
+  @media(max-width:840px){.feat{grid-template-columns:1fr;}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 2px 8px -4px rgba(10,23,19,.08);transition:.18s;}
+  .card:hover{transform:translateY(-4px);box-shadow:0 24px 50px -28px rgba(10,23,19,.3);border-color:var(--line2);}
+  .card .ic{width:52px;height:52px;border-radius:15px;background:linear-gradient(140deg,#15a06f,#0b3b2e);display:grid;place-items:center;margin-bottom:16px;box-shadow:0 10px 22px -12px rgba(14,159,110,.8);}
+  .card .ic svg{width:24px;height:24px;stroke:#fff;}
+  .card h3{font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:-.3px;}
+  .card p{color:var(--muted);font-size:15px;margin-top:8px;}
+  .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--accent2);background:var(--mint);border:1px solid var(--mint2);padding:4px 10px;border-radius:999px;margin-bottom:14px;}
+
+  /* rewards math */
+  .math{background:linear-gradient(135deg,#0a3527,#10543d);color:#fff;border-radius:28px;overflow:hidden;position:relative;}
+  .math::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 420px at 90% 0%,rgba(63,211,154,.18),transparent 60%);}
+  .math .inner{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:54px 48px;}
+  @media(max-width:840px){.math .inner{grid-template-columns:1fr;gap:30px;padding:38px 26px;}}
+  .math h2{font-family:var(--display);font-size:clamp(26px,3.2vw,36px);letter-spacing:-1px;line-height:1.1;}
+  .math p{color:rgba(255,255,255,.84);font-size:16px;margin-top:14px;}
+  .ladder{display:flex;flex-direction:column;gap:12px;}
+  .step{display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 18px;}
+  .step .n{width:34px;height:34px;border-radius:10px;background:rgba(126,240,191,.18);color:#7ef0bf;display:grid;place-items:center;font-weight:800;flex:none;}
+  .step .t{font-weight:800;font-size:15px;} .step .d{font-size:13px;color:rgba(255,255,255,.72);margin-top:1px;}
+  .step .big{margin-left:auto;font-family:var(--display);font-weight:800;font-size:18px;color:#7ef0bf;white-space:nowrap;}
+
+  /* how it works */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;counter-reset:s;}
+  @media(max-width:840px){.steps{grid-template-columns:1fr;}}
+  .stepc{position:relative;padding:28px;border:1px solid var(--line);border-radius:20px;background:#fff;}
+  .stepc .num{font-family:var(--display);font-size:15px;font-weight:800;color:var(--accent2);background:var(--mint);width:38px;height:38px;border-radius:11px;display:grid;place-items:center;margin-bottom:14px;}
+  .stepc h3{font-family:var(--display);font-size:18px;font-weight:700;} .stepc p{color:var(--muted);font-size:15px;margin-top:7px;}
+
+  /* auto top-up highlight */
+  .auto{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center;}
+  @media(max-width:840px){.auto{grid-template-columns:1fr;gap:30px;}}
+  .auto .panel{background:#fff;border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:0 30px 60px -34px rgba(10,23,19,.4);}
+  .arow{display:flex;align-items:center;gap:13px;padding:14px;border:1px solid var(--line);border-radius:14px;margin-bottom:10px;}
+  .arow:last-child{margin-bottom:0;}
+  .arow .ic{width:42px;height:42px;border-radius:12px;background:var(--mint);display:grid;place-items:center;flex:none;} .arow .ic svg{width:20px;height:20px;stroke:var(--accent);}
+  .arow .t{font-weight:800;font-size:14.5px;} .arow .d{font-size:12.5px;color:var(--muted);}
+  .arow .pill{margin-left:auto;font-size:11px;font-weight:800;color:var(--accent2);background:var(--mint);border:1px solid var(--mint2);padding:5px 10px;border-radius:999px;}
+  .chk{display:flex;gap:11px;margin-top:14px;font-size:15px;color:var(--ink);font-weight:600;align-items:flex-start;}
+  .chk svg{width:22px;height:22px;flex:none;margin-top:1px;}
+
+  /* FAQ */
+  .faq{max-width:760px;margin:0 auto;}
+  details{border:1px solid var(--line);border-radius:16px;padding:4px 20px;margin-bottom:12px;background:#fff;transition:.14s;}
+  details[open]{border-color:var(--line2);box-shadow:0 10px 30px -22px rgba(10,23,19,.4);}
+  summary{list-style:none;cursor:pointer;padding:18px 0;font-weight:700;font-size:16px;display:flex;align-items:center;gap:12px;}
+  summary::-webkit-details-marker{display:none;}
+  summary .pl{margin-left:auto;width:22px;height:22px;flex:none;transition:.2s;color:var(--accent2);}
+  details[open] summary .pl{transform:rotate(45deg);}
+  details p{color:var(--muted);font-size:15px;padding:0 0 18px;margin:0;}
+
+  /* final CTA */
+  .final{background:radial-gradient(120% 120% at 80% 0%,#1c7a57 0%,#0c3527 55%,#06231a 100%);color:#fff;border-radius:30px;text-align:center;padding:64px 30px;position:relative;overflow:hidden;}
+  .final::before{content:"";position:absolute;inset:0;background:radial-gradient(400px 400px at 15% 90%,rgba(63,211,154,.2),transparent 60%);}
+  .final h2{position:relative;font-family:var(--display);font-size:clamp(28px,3.6vw,42px);letter-spacing:-1px;}
+  .final p{position:relative;color:rgba(255,255,255,.86);font-size:18px;margin:14px auto 28px;max-width:520px;}
+  .final .cta{position:relative;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+
+  footer{padding:46px 0 60px;border-top:1px solid var(--line);margin-top:84px;color:var(--muted);}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:18px;align-items:center;}
+  footer .brand{color:var(--ink);} footer nav{margin-left:auto;display:flex;gap:24px;flex-wrap:wrap;}
+  footer a{font-weight:600;font-size:14px;} footer a:hover{color:var(--ink);}
+  .fineprint{font-size:12px;color:var(--faint);margin-top:18px;max-width:760px;}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="mark">S</span><span>Shuk&nbsp;Gift</span></a>
+    <nav>
+      <a class="nlink" href="#how">How it works</a>
+      <a class="nlink" href="#rewards">Rewards</a>
+      <a class="nlink" href="#auto">Auto top-up</a>
+      <a class="nlink" href="#faq">FAQ</a>
+      <a class="btn light" href="/app" style="padding:10px 18px;font-size:14px">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<div class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">🎁 Welcome bonus — load $100, shop with $110</span>
+      <h1>The store credit that <span class="hl">pays you back.</span></h1>
+      <p class="lead">Load your Shuk card once, earn rewards on every single purchase, and set auto top-up so you never run out. Why pay with plastic when paying with Shuk pays you back?</p>
+      <div class="cta">
+        <a class="btn light" href="/app">Get your card — it's free</a>
+        <a class="btn ghost" href="#how">See how it works</a>
+      </div>
+      <div class="trust">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Bank-grade security</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>No card fees</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg>Rewards on every visit</span>
+      </div>
+    </div>
+    <div class="cardstage">
+      <div class="gc">
+        <div class="mesh"></div><div class="grain"></div>
+        <div class="r1"><span class="nm"><span class="dot">S</span>Shuk Gift</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M5 12a9 9 0 0 1 14 0" opacity=".5"/><path d="M8.5 15a5 5 0 0 1 7 0" opacity=".75"/><path d="M11.5 18h1"/></svg></div>
+        <div class="chip"></div>
+        <div class="lbl">Card balance</div><div class="bal">$110.00</div>
+        <div class="num">5214 8896 2043 7781</div>
+        <div class="foot"><span>YOUR NAME</span><span>STORE CREDIT</span></div>
+      </div>
+      <div class="floatchip fc1"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg></span><div><div>+50 pts</div><div class="sm">earned today</div></div></div>
+      <div class="floatchip fc2"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v5h-5"/></svg></span><div><div>Auto top-up</div><div class="sm">+$50 added</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- STRIP -->
+<div class="strip"><div class="wrap">
+  <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Earn points on every purchase</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>One-time welcome bonus</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Link your bank in seconds</span>
+  <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Never run out with auto top-up</span>
+</div></div>
+
+<!-- FEATURES -->
+<section id="features"><div class="wrap">
+  <div class="sec-head">
+    <span class="eyebrow">Why Shuk</span>
+    <h2>A wallet that works harder than your debit card</h2>
+    <p>Everything you need to load, spend, and earn — in one beautiful place.</p>
+  </div>
+  <div class="feat">
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg></div><h3>Rewards on every visit</h3><p>Earn loyalty points back on every purchase. 100 points = $1.00 of store credit — redeemable anytime, instantly.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18"/><path d="M12 8C12 5 10 3 8 4s0 4 4 4zM12 8c0-3 2-5 4-4s0 4-4 4z"/></svg></div><h3>A welcome bonus to start</h3><p>Make your first load and we’ll add bonus credit on top — free money on the shelves from day one.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M4 10v9M20 10v9M9 10v9M15 10v9M3 21h18"/></svg></div><h3>Link your bank, load by ACH</h3><p>Securely link a bank account and top up in seconds. Your details go straight to our banking partner — never stored in the app.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v5h-5"/></svg></div><h3>Auto top-up</h3><p>Set it once. We’ll reload your card when the balance runs low, or on a weekly or monthly schedule. Never run out mid-checkout again.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></div><h3>Pay in seconds</h3><p>Show your card number at the register and you’re done. Balance deducted, points earned, sale recorded — all at once.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h3>Safe & closed-loop</h3><p>Your balance is held in a real, dedicated bank ledger. Spendable in-store, protected, and always yours.</p></div>
+  </div>
+</div></section>
+
+<!-- REWARDS MATH -->
+<section id="rewards" style="padding-top:0"><div class="wrap">
+  <div class="math"><div class="inner">
+    <div>
+      <span class="eyebrow" style="color:#7ef0bf">The math</span>
+      <h2>Why we can out-reward the banks</h2>
+      <p>Every time you swipe plastic, the card networks take a cut from the store. Pay with Shuk credit and that cut all but disappears — and your balance even earns yield while it waits. That margin is what funds your rewards, and the banks simply can’t hand it back.</p>
+      <p style="font-weight:800;color:#fff;margin-top:18px">“Skip the swipe. Stack the rewards.”</p>
+    </div>
+    <div class="ladder">
+      <div class="step"><span class="n">1</span><div><div class="t">Welcome bonus</div><div class="d">A one-time boost on your first load</div></div><span class="big">$100 → $110</span></div>
+      <div class="step"><span class="n">2</span><div><div class="t">Points on every purchase</div><div class="d">Back as store credit, every visit</div></div><span class="big">% back</span></div>
+      <div class="step"><span class="n">3</span><div><div class="t">Redeem instantly</div><div class="d">Points become credit on your card</div></div><span class="big">100 pts = $1</span></div>
+    </div>
+  </div></div>
+</div></section>
+
+<!-- HOW IT WORKS -->
+<section id="how" style="padding-top:0"><div class="wrap">
+  <div class="sec-head">
+    <span class="eyebrow">How it works</span>
+    <h2>Up and running in three steps</h2>
+  </div>
+  <div class="steps">
+    <div class="stepc"><div class="num">1</div><h3>Sign in & link your bank</h3><p>Create your free card and securely connect a bank account to load funds by ACH.</p></div>
+    <div class="stepc"><div class="num">2</div><h3>Load & claim your bonus</h3><p>Add funds to your card and grab your one-time welcome bonus — extra credit, free.</p></div>
+    <div class="stepc"><div class="num">3</div><h3>Pay & earn, on repeat</h3><p>Spend in store, earn points back, and let auto top-up keep your balance ready.</p></div>
+  </div>
+</div></section>
+
+<!-- AUTO TOP-UP -->
+<section id="auto" style="padding-top:0"><div class="wrap">
+  <div class="auto">
+    <div>
+      <span class="tag">New</span>
+      <h2 style="font-family:var(--display);font-size:clamp(26px,3.2vw,36px);letter-spacing:-1px;line-height:1.1">Set it once. Never run out.</h2>
+      <p style="color:var(--muted);font-size:17px;margin-top:14px">Auto top-up keeps your card funded automatically — so checkout is never interrupted.</p>
+      <div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><b>Low-balance reload.</b> Drops below $50, $40 — your number? We add funds back automatically.</div></div>
+      <div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><b>Weekly or monthly.</b> Prefer a steady rhythm? Schedule a set amount every week or month.</div></div>
+      <div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><b>Fully in your control.</b> Change the amount, pause, or turn it off anytime — no surprises.</div></div>
+      <a class="btn dark" href="/app" style="margin-top:22px">Set up auto top-up</a>
+    </div>
+    <div class="panel">
+      <div style="display:flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:16px;margin-bottom:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v5h-5"/></svg>Auto top-up<span style="margin-left:auto;font-size:11px;font-weight:800;color:var(--accent2);background:var(--mint);border:1px solid var(--mint2);padding:5px 10px;border-radius:999px">On</span></div>
+      <div class="arow"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span><div><div class="t">When balance drops below $50</div><div class="d">Reload automatically</div></div><span class="pill">Trigger</span></div>
+      <div class="arow"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span><div><div class="t">Add $50 each time</div><div class="d">From bank •••• 7781</div></div><span class="pill">Amount</span></div>
+      <div class="arow"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><div><div class="t">Last reload: today</div><div class="d">+$50.00 added to your card</div></div><span class="pill">Done</span></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- FAQ -->
+<section id="faq" style="padding-top:0"><div class="wrap">
+  <div class="sec-head"><span class="eyebrow">Questions</span><h2>Good to know</h2></div>
+  <div class="faq">
+    <details open><summary>Is my money safe?<svg class="pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary><p>Yes. Your balance is held in a real, dedicated bank ledger through our regulated banking partner — not floating in an app. It’s store credit, spendable in-store, and always yours.</p></details>
+    <details><summary>How do rewards work?<svg class="pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary><p>You earn loyalty points back on every purchase. Points are worth 1¢ each — 100 points equals $1.00 of store credit — and you can redeem them to your card instantly from the Rewards page.</p></details>
+    <details><summary>What is auto top-up?<svg class="pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary><p>Auto top-up reloads your card automatically from your linked bank. Choose a low-balance trigger (e.g. when you drop below $50) or a weekly/monthly schedule. You can change the amount, pause, or cancel anytime.</p></details>
+    <details><summary>How do I add money?<svg class="pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary><p>Link a bank account once with your routing and account number, then top up by ACH in seconds. Your bank details are sent securely to our banking partner and are never stored in the app.</p></details>
+    <details><summary>Can I cash out my balance?<svg class="pl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></summary><p>Shuk credit is closed-loop store credit, spendable in participating stores. It isn’t transferable to other people or cashable — that’s what keeps it secure and lets us reward you more than a debit card can.</p></details>
+  </div>
+</div></section>
+
+<!-- FINAL CTA -->
+<section style="padding-top:0"><div class="wrap">
+  <div class="final">
+    <h2>Your first bonus is waiting.</h2>
+    <p>Get your free Shuk card, claim your welcome bonus, and start earning on every purchase.</p>
+    <div class="cta"><a class="btn light" href="/app">Get started — it's free</a><a class="btn ghost" href="#how">How it works</a></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <a class="brand" href="#top"><span class="mark">S</span><span>Shuk&nbsp;Gift</span></a>
+  <nav>
+    <a href="#how">How it works</a>
+    <a href="#rewards">Rewards</a>
+    <a href="#auto">Auto top-up</a>
+    <a href="#faq">FAQ</a>
+    <a href="/app">Sign in</a>
+  </nav>
+</div>
+<div class="wrap"><p class="fineprint">Shuk Gift is a closed-loop store-credit program. Store credit is spendable only at participating stores, is not transferable, and cannot be cashed out. Bank transfers are processed by ACH through our banking partner and typically settle in 1–3 business days. © <span id="yr"></span> Shuk Gift.</p></div>
+</footer>
+
+<script>document.getElementById("yr").textContent=new Date().getFullYear();</script>
+</body>
+</html>
