@@ -8,6 +8,45 @@ function merchantList() {
     .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 }
 
+// ---- Program configuration (admin-editable, stored in Clerk metadata) ----
+// The canonical store admin's Clerk user holds the program config so every
+// request (customer or merchant) reads the same settings.
+const CONFIG_EMAIL = merchantList()[0];
+const PROGRAM_DEFAULTS = {
+  storeName: "Shuk",                // brand shown to customers
+  programName: "Shuk Gift",         // wallet / card name
+  rewardsPercent: 1,                // % back earned as points (1 point = 1¢)
+  firstLoadBonusPercent: 5,         // bonus % on a customer's first load
+  firstLoadBonusCapCents: 2500,     // cap on the first-load bonus ($25)
+  firstLoadMinCents: 5000,          // minimum load to qualify ($50)
+  signupBonusPoints: 0,             // points granted once at signup
+  redeemMinPoints: 100,             // 100 points = $1.00
+};
+function cleanProgram(p) {
+  const o = p || {};
+  const num = (v, d, max) => { let n = Number(v); if (!isFinite(n) || n < 0) n = d; if (max != null && n > max) n = max; return n; };
+  const str = (v, d) => { const s = String(v == null ? d : v).trim().slice(0, 40); return s || d; };
+  return {
+    storeName: str(o.storeName, PROGRAM_DEFAULTS.storeName),
+    programName: str(o.programName, PROGRAM_DEFAULTS.programName),
+    rewardsPercent: num(o.rewardsPercent, PROGRAM_DEFAULTS.rewardsPercent, 25),
+    firstLoadBonusPercent: num(o.firstLoadBonusPercent, PROGRAM_DEFAULTS.firstLoadBonusPercent, 50),
+    firstLoadBonusCapCents: Math.round(num(o.firstLoadBonusCapCents, PROGRAM_DEFAULTS.firstLoadBonusCapCents, 100000)),
+    firstLoadMinCents: Math.round(num(o.firstLoadMinCents, PROGRAM_DEFAULTS.firstLoadMinCents, 200000)),
+    signupBonusPoints: Math.round(num(o.signupBonusPoints, PROGRAM_DEFAULTS.signupBonusPoints, 100000)),
+    redeemMinPoints: Math.max(1, Math.round(num(o.redeemMinPoints, PROGRAM_DEFAULTS.redeemMinPoints, 100000))),
+  };
+}
+async function loadProgram(clerk, knownUser) {
+  let holder = null;
+  if (knownUser && (knownUser.emailAddresses || []).some(e => (e.emailAddress || "").toLowerCase() === CONFIG_EMAIL)) holder = knownUser;
+  if (!holder && clerk) {
+    try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {}
+  }
+  const saved = (holder && holder.privateMetadata && holder.privateMetadata.program) || {};
+  return { holder, program: cleanProgram({ ...PROGRAM_DEFAULTS, ...saved }) };
+}
+
 async function inc(path, method = "GET", body) {
   const r = await fetch(IB + path, {
     method,
@@ -79,7 +118,7 @@ export default async function handler(req, res) {
   const action = body.action || "bootstrap";
 
   // ---- Auth (Clerk) ----
-  let email = null, name = null;
+  let email = null, name = null, clerk = null, meUser = null;
   if (secret) {
     const auth = req.headers.authorization || "";
     const tok = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -87,10 +126,10 @@ export default async function handler(req, res) {
     try {
       const { verifyToken, createClerkClient } = await import("@clerk/backend");
       const claims = await verifyToken(tok, { secretKey: secret });
-      const clerk = createClerkClient({ secretKey: secret });
-      const u = await clerk.users.getUser(claims.sub);
-      email = (u.emailAddresses.find(e => e.id === u.primaryEmailAddressId) || u.emailAddresses[0] || {}).emailAddress || null;
-      name = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || email;
+      clerk = createClerkClient({ secretKey: secret });
+      meUser = await clerk.users.getUser(claims.sub);
+      email = (meUser.emailAddresses.find(e => e.id === meUser.primaryEmailAddressId) || meUser.emailAddresses[0] || {}).emailAddress || null;
+      name = [meUser.firstName, meUser.lastName].filter(Boolean).join(" ") || meUser.username || email;
     } catch (e) {
       return res.status(200).json({ needsAuth: true, error: "Session invalid." });
     }
@@ -126,6 +165,29 @@ export default async function handler(req, res) {
       return c;
     }
 
+    // ---- Program config + per-customer reward flags ----
+    const { holder: cfgHolder, program } = await loadProgram(clerk, meUser);
+    const myFlags = (meUser && meUser.privateMetadata && meUser.privateMetadata.shuk) || {};
+    async function setMyFlag(patch) {
+      try {
+        const merged = { ...((meUser.privateMetadata && meUser.privateMetadata.shuk) || {}), ...patch };
+        await clerk.users.updateUserMetadata(meUser.id, { privateMetadata: { shuk: merged } });
+        meUser.privateMetadata = { ...(meUser.privateMetadata || {}), shuk: merged };
+      } catch {}
+    }
+    // First-load bonus: store credit added the first time a customer loads enough.
+    async function applyFirstLoadBonus(card, loadedCents) {
+      if (myFlags.firstLoadBonus) return 0;
+      if (program.firstLoadBonusPercent <= 0) return 0;
+      if (loadedCents < program.firstLoadMinCents) return 0;
+      let bonus = Math.round(loadedCents * program.firstLoadBonusPercent / 100);
+      if (program.firstLoadBonusCapCents > 0) bonus = Math.min(bonus, program.firstLoadBonusCapCents);
+      if (bonus <= 0) return 0;
+      await inc("/simulations/interest_payments", "POST", { account_id: card.id, amount: bonus });
+      await setMyFlag({ firstLoadBonus: true });
+      return bonus;
+    }
+
     // ---- Actions ----
     if (action === "bootstrap") {
       if (isMerchant) {
@@ -143,13 +205,18 @@ export default async function handler(req, res) {
         const transactions = lists.flat().sort((x, y) => new Date(y.at || 0) - new Date(x.at || 0)).slice(0, 60);
         const ptsAccts = all.filter(a => String(a.name || "").startsWith("Points:"));
         const pointsIssued = (await Promise.all(ptsAccts.map(a => balance(a.id)))).reduce((x, y) => x + y, 0);
-        return res.status(200).json({ role: "merchant", email, name, cards, transactions, posConnected: !!DK, pointsIssued });
+        return res.status(200).json({ role: "merchant", email, name, cards, transactions, posConnected: !!DK, pointsIssued, program });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
+      // One-time signup bonus in points (if configured and not yet granted).
+      if (program.signupBonusPoints > 0 && !myFlags.signupBonus) {
+        try { await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: program.signupBonusPoints }); await setMyFlag({ signupBonus: true }); } catch {}
+      }
       return res.status(200).json({
         role: "customer", email, name, cardId: card.id, code: codeFor(card), cardNumber: cardNumber(card),
         balance: await balance(card.id), points: await balance(pts.id), transactions: await txns(card.id, 12),
+        program, firstLoadBonusUsed: !!myFlags.firstLoadBonus,
       });
     }
 
@@ -159,7 +226,8 @@ export default async function handler(req, res) {
       if (amount > 200000) return res.status(200).json({ error: "Max $2,000 per load." });
       const card = await ensureCard(email);
       await inc("/simulations/interest_payments", "POST", { account_id: card.id, amount });
-      return res.status(200).json({ ok: true, balance: await balance(card.id) });
+      const bonus = await applyFirstLoadBonus(card, amount);
+      return res.status(200).json({ ok: true, balance: await balance(card.id), bonus });
     }
 
     if (action === "bankStatus") {
@@ -200,7 +268,8 @@ export default async function handler(req, res) {
         try { await inc("/simulations/ach_transfers/" + tr.id + "/settle", "POST"); settled = true; }
         catch { try { await inc("/simulations/ach_transfers/" + tr.id + "/acknowledge", "POST"); } catch {} }
       }
-      return res.status(200).json({ ok: true, status: (tr && tr.status) || "pending", settled, balance: await balance(card.id) });
+      const bonus = settled ? await applyFirstLoadBonus(card, amount) : 0;
+      return res.status(200).json({ ok: true, status: (tr && tr.status) || "pending", settled, bonus, balance: await balance(card.id) });
     }
 
     if (action === "charge") {
@@ -284,7 +353,7 @@ export default async function handler(req, res) {
         const cardAcct = all.find(a => a.id === cardId);
         const em = cardAcct && String(cardAcct.name || "").startsWith("Gift:") ? cardAcct.name.slice(5) : null;
         if (em) {
-          pointsAwarded = Math.floor(total);
+          pointsAwarded = Math.floor(total * program.rewardsPercent);
           if (pointsAwarded > 0) {
             const pts = await ensurePoints(em);
             await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: pointsAwarded });
@@ -298,7 +367,8 @@ export default async function handler(req, res) {
     if (action === "redeem") {
       // Customer redeems loyalty points for store credit. 100 points = $1.00 (1 point = 1¢).
       const points = Math.floor(Number(body.points) || 0);
-      if (points < 100) return res.status(200).json({ error: "Redeem at least 100 points ($1.00)." });
+      const minPts = program.redeemMinPoints || 100;
+      if (points < minPts) return res.status(200).json({ error: "Redeem at least " + minPts + " points ($" + (minPts / 100).toFixed(2) + ")." });
       const pts = await ensurePoints(email);
       const have = await balance(pts.id);
       if (points > have) return res.status(200).json({ error: "You only have " + have + " points." });
@@ -308,6 +378,22 @@ export default async function handler(req, res) {
       if (t && t.status === "pending_approval" && t.id) { try { await inc("/account_transfers/" + t.id + "/approve", "POST"); } catch {} }
       await inc("/simulations/interest_payments", "POST", { account_id: card.id, amount: creditCents });
       return res.status(200).json({ ok: true, points: await balance(pts.id), balance: await balance(card.id), credited: creditCents });
+    }
+
+    if (action === "setProgram") {
+      // Admin-only: save the program configuration (rates, bonuses, branding).
+      if (!isMerchant) return res.status(200).json({ error: "Merchants only." });
+      if (!clerk) return res.status(200).json({ error: "Sign-in not configured." });
+      let holder = cfgHolder;
+      if (!holder) { try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {} }
+      if (!holder) return res.status(200).json({ error: "Could not locate the store admin account." });
+      const merged = cleanProgram({ ...program, ...(body.program || {}) });
+      try {
+        await clerk.users.updateUserMetadata(holder.id, { privateMetadata: { ...(holder.privateMetadata || {}), program: merged } });
+      } catch (e) {
+        return res.status(200).json({ error: "Could not save settings: " + String((e && e.message) || e).slice(0, 120) });
+      }
+      return res.status(200).json({ ok: true, program: merged });
     }
 
     if (action === "customerSnapshot") {
