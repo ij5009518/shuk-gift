@@ -46,6 +46,14 @@ async function txns(id, limit) {
   } catch { return []; }
 }
 
+// Find a customer's linked bank (External Account), tagged by description.
+async function findBank(em) {
+  try {
+    const d = await inc("/external_accounts?limit=100");
+    return (d.data || []).find(x => (x.description || "") === "Bank:" + em && (x.status === undefined || x.status === "active")) || null;
+  } catch { return null; }
+}
+
 // ---- POS connector (records sales in the store's point-of-sale) ----
 const DK = process.env.DECIMAL_API_KEY;
 const DB = process.env.DECIMAL_BASE_URL || "https://api.poswithlogic.dev";
@@ -152,6 +160,47 @@ export default async function handler(req, res) {
       const card = await ensureCard(email);
       await inc("/simulations/interest_payments", "POST", { account_id: card.id, amount });
       return res.status(200).json({ ok: true, balance: await balance(card.id) });
+    }
+
+    if (action === "bankStatus") {
+      const b = await findBank(email);
+      return res.status(200).json({ linked: !!b, last4: b ? String(b.account_number || "").slice(-4) : null });
+    }
+
+    if (action === "linkBank") {
+      // Register the customer's bank account so we can pull funds from it by ACH.
+      const routing = String(body.routingNumber || "").replace(/\D/g, "");
+      const account = String(body.accountNumber || "").replace(/\D/g, "");
+      const funding = body.funding === "savings" ? "savings" : "checking";
+      if (routing.length !== 9) return res.status(200).json({ error: "Enter a valid 9-digit routing number." });
+      if (account.length < 4) return res.status(200).json({ error: "Enter a valid account number." });
+      await inc("/external_accounts", "POST", { routing_number: routing, account_number: account, funding, description: "Bank:" + email });
+      return res.status(200).json({ ok: true, last4: account.slice(-4) });
+    }
+
+    if (action === "addFundsAch") {
+      // Pull funds from the customer's linked bank into their gift card account via an
+      // ACH debit (negative amount originates a debit, pulling funds in).
+      const amount = Math.round(Number(body.amount) || 0);
+      if (amount <= 0) return res.status(200).json({ error: "Enter a valid amount." });
+      if (amount > 200000) return res.status(200).json({ error: "Max $2,000 per transfer." });
+      const bank = await findBank(email);
+      if (!bank) return res.status(200).json({ error: "Link a bank account first." });
+      const card = await ensureCard(email);
+      let tr;
+      try {
+        tr = await inc("/ach_transfers", "POST", { account_id: card.id, amount: -amount, statement_descriptor: "Shuk Gift", external_account_id: bank.id });
+      } catch (e) {
+        return res.status(200).json({ error: String((e && e.message) || e).slice(0, 160) });
+      }
+      if (tr && tr.status === "pending_approval" && tr.id) { try { await inc("/ach_transfers/" + tr.id + "/approve", "POST"); } catch {} }
+      // Sandbox: simulate settlement so the balance reflects immediately (ignored in production).
+      let settled = false;
+      if (tr && tr.id && /sandbox/.test(IB)) {
+        try { await inc("/simulations/ach_transfers/" + tr.id + "/settle", "POST"); settled = true; }
+        catch { try { await inc("/simulations/ach_transfers/" + tr.id + "/acknowledge", "POST"); } catch {} }
+      }
+      return res.status(200).json({ ok: true, status: (tr && tr.status) || "pending", settled, balance: await balance(card.id) });
     }
 
     if (action === "charge") {
