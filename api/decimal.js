@@ -99,7 +99,7 @@ export default async function handler(req, res) {
         items: [{ productCode: code, quantity, unitPrice, subtotal, isTaxable, discountAmount: 0 }],
         payments: [{
           paymentMethod: "APICreditCard", amount: total, referenceNo: externalInvoiceId.slice(0, 15), dateTime: now,
-          cardholderName: "Shuk Gift", authorizationCode: externalInvoiceId.slice(0, 15), maskedCreditCardNumber: "************GIFT",
+          cardholderName: "Shuk Gift", authorizationCode: externalInvoiceId.slice(0, 10), maskedCreditCardNumber: "************GIFT",
         }],
         memo: "Shuk Gift redemption",
       };
