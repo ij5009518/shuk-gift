@@ -33,11 +33,15 @@ export default async function handler(req, res) {
     if (action === "products") {
       const take = Math.min(Number(body.take) || 20, 100);
       const { data } = await pos("/products?take=" + take);
-      const products = (data.data || []).map(p => ({
-        id: p.id, code: p.code ?? p.sku ?? null, name: p.name ?? p.description ?? null,
+      const arr = Array.isArray(data) ? data
+        : (data.data || data.items || data.results || data.products || data.records || []);
+      const products = arr.map(p => ({
+        id: p.id ?? p.productId,
+        code: p.code ?? p.sku ?? p.itemCode ?? p.productCode ?? null,
+        name: p.name ?? p.description ?? p.productName ?? null,
         price: p.price, priceQty: p.priceQty,
       }));
-      return res.status(200).json({ products, total: data.total ?? null, raw: (data.data || [])[0] || null });
+      return res.status(200).json({ products, total: data.total ?? null, keys: Object.keys(data || {}), sampleRaw: arr[0] || null });
     }
 
     if (action === "product") {
