@@ -2,196 +2,102 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#0b3b2e" />
-<title>Shuk Gift — Wallet</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Shuk Gift</title>
 <style>
   :root{
-    --bg:#eef3f0; --bg2:#e6ede9;
-    --surface:#ffffff; --surface2:#f4f8f6; --surface3:#eef3f0; --line:#e2eae6; --line2:#d6e1db;
-    --ink:#0a1713; --muted:#5a6b64; --faint:#93a49c;
-    --accent:#0e9f6e; --accent2:#0b855c; --accentdk:#0b3b2e;
-    --mint:#e7f6ef; --mint2:#d7f0e4;
-    --gold:#d9a93a; --danger:#d8453a; --dangerbg:#fcecea;
-    --r:18px; --r2:14px;
-    --sh-sm:0 1px 2px rgba(10,23,19,.05), 0 1px 3px rgba(10,23,19,.04);
-    --sh:0 4px 14px -6px rgba(10,23,19,.12), 0 2px 6px -3px rgba(10,23,19,.08);
-    --sh-lg:0 24px 60px -28px rgba(10,23,19,.4);
-    --card1:#0a3527; --card2:#10543d; --card3:#1c7a57;
-    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-    --display:'Sora','Inter',-apple-system,sans-serif;
+    --bg:#ffffff; --surface:#f5f7f6; --surface2:#eef1f0; --line:#e5e9e7;
+    --ink:#0c1512; --muted:#5d6b65; --faint:#93a09a;
+    --accent:#0e9f6e; --accent2:#0b8a5f; --ok:#0e9f6e; --okbg:#e7f6ef;
+    --card1:#0b3b2e; --card2:#114b39;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;color-scheme:light;}
-  body{background:
-    radial-gradient(900px 600px at 100% -10%, rgba(28,122,87,.10), transparent 60%),
-    radial-gradient(800px 500px at -10% 110%, rgba(14,159,110,.08), transparent 55%),
-    var(--bg);}
-  button{font-family:inherit;cursor:pointer;} input,select{font-family:inherit;color-scheme:light;} svg{display:block;}
-  ::selection{background:var(--mint2);}
+  html,body{margin:0;background:#eef1f0;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color-scheme:light;}
+  button{font-family:inherit;cursor:pointer;} input{font-family:inherit;color-scheme:light;} svg{display:block;}
 
-  /* ---------- Auth gate ---------- */
-  .auth{position:fixed;inset:0;display:grid;place-items:center;padding:24px;z-index:100;overflow:hidden;
-    background:radial-gradient(130% 120% at 80% -10%,#1c7a57 0%,#0c3527 52%,#05201a 100%);}
-  .auth::before{content:"";position:absolute;inset:0;background:
-    radial-gradient(420px 420px at 18% 88%, rgba(63,211,154,.22), transparent 60%),
-    radial-gradient(360px 360px at 92% 12%, rgba(217,169,58,.14), transparent 60%);pointer-events:none;}
-  .authcard{position:relative;background:rgba(255,255,255,.98);border-radius:24px;padding:38px 32px;width:100%;max-width:400px;
-    box-shadow:0 40px 90px -34px rgba(0,0,0,.65);text-align:center;border:1px solid rgba(255,255,255,.6);}
-  .authcard .pitch{color:var(--muted);font-size:14.5px;margin:14px 0 22px;line-height:1.55;}
-  .authcard .perks{display:flex;gap:8px;justify-content:center;margin:-4px 0 20px;flex-wrap:wrap;}
-  .perk{font-size:11.5px;font-weight:700;color:var(--accent2);background:var(--mint);border:1px solid var(--mint2);padding:6px 10px;border-radius:999px;}
+  /* Auth gate */
+  .auth{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(120% 120% at 80% 0%,#15614a 0%,#0c3527 55%,#06231a 100%);padding:24px;z-index:100;}
+  .authcard{background:#fff;border-radius:20px;padding:34px 30px;width:100%;max-width:380px;box-shadow:0 30px 70px -30px rgba(0,0,0,.55);text-align:center;}
+  .brand{display:inline-flex;align-items:center;gap:10px;font-weight:850;font-size:22px;letter-spacing:-.5px;}
+  .mark{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#3fd39a);display:grid;place-items:center;color:#fff;font-weight:850;font-size:15px;}
+  .auth p{color:var(--muted);font-size:14px;margin:10px 0 20px;}
   #clerkSignIn{display:flex;justify-content:center;}
 
-  .brand{display:inline-flex;align-items:center;gap:11px;font-family:var(--display);font-weight:800;font-size:21px;letter-spacing:-.4px;color:var(--ink);}
-  .mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(140deg,#15a06f,#0b3b2e);display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:800;font-size:17px;box-shadow:0 6px 16px -6px rgba(14,159,110,.7), inset 0 1px 0 rgba(255,255,255,.25);}
-
-  /* ---------- Shell ---------- */
-  .shell{display:none;min-height:100vh;min-height:100dvh;}
-  aside{width:256px;flex:none;background:rgba(255,255,255,.86);backdrop-filter:blur(12px);border-right:1px solid var(--line);
-    position:sticky;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;padding:20px 16px;}
-  aside .brand{padding:6px 8px 4px;font-size:19px;}
-  .rolepill{margin:14px 8px 14px;font-size:10.5px;font-weight:800;letter-spacing:.7px;color:var(--accent2);
-    background:var(--mint);border:1px solid var(--mint2);padding:5px 11px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;width:fit-content;}
-  .rolepill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(14,159,110,.18);}
-  aside nav{display:flex;flex-direction:column;gap:2px;}
-  aside nav button{display:flex;align-items:center;gap:12px;background:none;border:none;border-radius:12px;padding:11px 12px;font-size:14.5px;font-weight:600;color:var(--muted);text-align:left;position:relative;transition:background .14s,color .14s;}
+  /* Shell */
+  .shell{display:none;min-height:100vh;}
+  aside{width:240px;flex:none;background:#fff;border-right:1px solid var(--line);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:22px 16px;}
+  aside .brand{padding:4px 8px 6px;font-size:19px;}
+  .rolepill{margin:8px 8px 16px;font-size:11px;font-weight:800;letter-spacing:.5px;color:var(--accent2);background:var(--okbg);padding:5px 10px;border-radius:7px;display:inline-block;width:fit-content;}
+  aside nav{display:flex;flex-direction:column;gap:3px;}
+  aside nav button{display:flex;align-items:center;gap:11px;background:none;border:none;border-radius:11px;padding:11px 12px;font-size:14.5px;font-weight:650;color:var(--muted);text-align:left;}
   aside nav button svg{width:19px;height:19px;stroke:currentColor;flex:none;}
-  aside nav button:hover{background:var(--surface2);color:var(--ink);}
-  aside nav button.on{background:var(--mint);color:var(--accent2);font-weight:700;}
-  aside nav button.on::before{content:"";position:absolute;left:-16px;top:11px;bottom:11px;width:3px;border-radius:0 3px 3px 0;background:var(--accent);}
+  aside nav button:hover{background:var(--surface);color:var(--ink);}
+  aside nav button.on{background:var(--okbg);color:var(--accent2);}
   .spacer{flex:1;}
   .userchip{border-top:1px solid var(--line);padding-top:14px;}
-  .userchip .who{display:flex;align-items:center;gap:11px;padding:4px 8px;}
-  .av{width:38px;height:38px;border-radius:50%;background:linear-gradient(140deg,#bfe6d4,#8fd6b6);display:grid;place-items:center;font-weight:800;font-size:14px;color:#0b3b2e;flex:none;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(11,59,46,.08);}
+  .userchip .who{display:flex;align-items:center;gap:10px;padding:4px 8px;}
+  .av{width:34px;height:34px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;font-weight:800;font-size:13px;color:#3a463f;flex:none;overflow:hidden;}
   .av img{width:100%;height:100%;object-fit:cover;}
   .userchip .nm{font-size:13.5px;font-weight:800;line-height:1.2;}
-  .userchip .em{font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
-  .out{margin-top:10px;width:100%;display:flex;align-items:center;gap:9px;background:none;border:1px solid var(--line);border-radius:11px;padding:10px 12px;font-size:13px;font-weight:700;color:var(--muted);transition:.14s;}
-  .out:hover{background:var(--surface2);color:var(--ink);border-color:var(--line2);} .out svg{width:16px;height:16px;stroke:currentColor;}
+  .userchip .em{font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;}
+  .out{margin-top:8px;width:100%;display:flex;align-items:center;gap:9px;background:none;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;font-weight:700;color:var(--muted);}
+  .out:hover{background:var(--surface);color:var(--ink);} .out svg{width:16px;height:16px;stroke:currentColor;}
 
   .main{flex:1;min-width:0;display:flex;flex-direction:column;}
-  header.top{position:sticky;top:0;z-index:6;background:rgba(238,243,240,.78);backdrop-filter:saturate(140%) blur(14px);border-bottom:1px solid var(--line);padding:15px 34px;display:flex;align-items:center;gap:14px;}
-  header.top .title{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.4px;}
-  header.top .sub{font-size:12.5px;color:var(--muted);margin-top:1px;font-weight:500;}
+  header.top{position:sticky;top:0;z-index:6;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:16px 32px;display:flex;align-items:center;gap:14px;}
+  header.top .title{font-size:19px;font-weight:850;letter-spacing:-.3px;}
   .grow{flex:1;}
-  .secure{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);font-weight:600;background:var(--surface);border:1px solid var(--line);padding:7px 12px;border-radius:999px;box-shadow:var(--sh-sm);}
-  .secure svg{width:14px;height:14px;stroke:var(--accent);}
-  .scroll{padding:28px 34px 90px;width:100%;max-width:1120px;}
-  .view{animation:fade .26s cubic-bezier(.2,.7,.3,1);} @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
-  .grid2{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;align-items:start;}
-  .secline{font-size:12px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);margin:26px 2px 12px;}
-  .secline:first-child{margin-top:0;}
+  .secure{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);}
+  .secure svg{width:15px;height:15px;stroke:var(--accent);}
+  .scroll{padding:28px 32px 70px;width:100%;max-width:1080px;}
+  .view{animation:f .2s ease;} @keyframes f{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start;}
 
-  /* ---------- Gift card ---------- */
-  .cardwrap{perspective:1400px;max-width:440px;}
-  .gc{position:relative;border-radius:22px;padding:24px 24px 22px;color:#fff;overflow:hidden;aspect-ratio:1.586/1;
-    background:
-      radial-gradient(150% 130% at 88% -10%, #1f8a63 0%, var(--card2) 42%, var(--card1) 100%);
-    box-shadow:var(--sh-lg), inset 0 1px 0 rgba(255,255,255,.10);
-    transition:transform .18s cubic-bezier(.2,.7,.3,1), box-shadow .18s;transform-style:preserve-3d;}
-  .gc::after{content:"";position:absolute;inset:0;border-radius:22px;pointer-events:none;
-    background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.16) 45%,transparent 60%);
-    background-size:280% 280%;background-position:140% 0;transition:none;}
-  .gc.shine::after{animation:shine 1.1s ease;}
-  @keyframes shine{from{background-position:140% 0;}to{background-position:-40% 0;}}
-  .gc .mesh{position:absolute;inset:0;pointer-events:none;opacity:.9;
-    background:radial-gradient(120px 120px at 16% 86%, rgba(63,211,154,.35), transparent 60%),
-               radial-gradient(160px 160px at 96% 8%, rgba(217,169,58,.18), transparent 60%);}
-  .gc .grain{position:absolute;inset:0;pointer-events:none;opacity:.5;mix-blend-mode:overlay;
-    background-image:radial-gradient(rgba(255,255,255,.18) 1px, transparent 1px);background-size:7px 7px;}
-  .gc>*{position:relative;}
-  .gc .r1{display:flex;justify-content:space-between;align-items:flex-start;}
-  .gc .r1 .nm{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:.2px;display:flex;align-items:center;gap:8px;}
-  .gc .r1 .nm .dot{width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:12px;font-weight:800;backdrop-filter:blur(3px);}
-  .gc .wifi{opacity:.85;}
-  .gc .chip{width:42px;height:31px;border-radius:7px;margin-top:18px;
-    background:linear-gradient(135deg,#f4dd9a,#d6b35f 55%,#b8923f);
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);position:relative;}
-  .gc .chip::before{content:"";position:absolute;inset:6px 8px;border:1px solid rgba(120,80,20,.45);border-radius:3px;}
-  .gc .chip::after{content:"";position:absolute;left:50%;top:5px;bottom:5px;width:1px;background:rgba(120,80,20,.45);}
-  .gc .lbl{margin-top:16px;font-size:11px;opacity:.75;letter-spacing:.4px;text-transform:uppercase;font-weight:700;}
-  .gc .bal{font-family:var(--display);font-size:36px;font-weight:800;letter-spacing:-1px;margin-top:1px;line-height:1;}
-  .gc .num{margin-top:16px;font-size:16.5px;letter-spacing:3px;font-variant-numeric:tabular-nums;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.25);}
-  .gc .foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;font-size:11px;opacity:.82;letter-spacing:.6px;font-weight:600;}
-  .gc .foot .vlabel{font-size:8.5px;opacity:.7;letter-spacing:1px;}
-  .gc.rewards{background:radial-gradient(150% 130% at 88% -10%, #2f9e72 0%, #14694a 42%, #0a3527 100%);}
+  .gc{position:relative;border-radius:20px;padding:24px;color:#fff;overflow:hidden;max-width:430px;background:radial-gradient(130% 130% at 100% 0%,#15614a 0%,var(--card2) 45%,var(--card1) 100%);box-shadow:0 20px 44px -22px rgba(12,21,18,.6);}
+  .gc .deco{position:absolute;top:-40px;right:-30px;width:160px;height:160px;border-radius:50%;background:rgba(63,211,154,.18);}
+  .gc .r1{display:flex;justify-content:space-between;align-items:center;position:relative;}
+  .gc .r1 .nm{font-weight:850;font-size:15px;letter-spacing:.3px;}
+  .gc .r1 .tag{font-size:10.5px;font-weight:800;letter-spacing:1.5px;opacity:.7;}
+  .gc .lbl{margin-top:26px;font-size:12px;opacity:.72;}
+  .gc .bal{font-size:38px;font-weight:850;letter-spacing:-1px;margin-top:2px;}
+  .gc .foot{display:flex;justify-content:space-between;margin-top:22px;font-size:11.5px;opacity:.72;letter-spacing:.5px;}
 
-  .actions{display:grid;grid-template-columns:1fr 1fr;gap:11px;max-width:440px;margin-top:13px;}
-  .act{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;align-items:center;gap:11px;color:var(--ink);font-weight:700;font-size:14px;box-shadow:var(--sh-sm);transition:.14s;}
-  .act:hover{transform:translateY(-1px);box-shadow:var(--sh);border-color:var(--line2);}
-  .act .ic{width:36px;height:36px;border-radius:10px;background:var(--mint);display:grid;place-items:center;flex:none;} .act .ic svg{width:18px;height:18px;stroke:var(--accent);}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:11px;max-width:430px;margin-top:14px;}
+  .act{background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px;display:flex;align-items:center;gap:11px;color:var(--ink);font-weight:750;font-size:14px;}
+  .act:hover{background:var(--surface);} .act .ic{width:34px;height:34px;border-radius:9px;background:var(--okbg);display:grid;place-items:center;} .act .ic svg{width:18px;height:18px;stroke:var(--accent);}
 
-  /* ---------- Blocks / stats ---------- */
-  .block{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;box-shadow:var(--sh-sm);}
-  .block h3{margin:0 0 14px;font-size:14px;font-weight:800;letter-spacing:-.2px;display:flex;align-items:center;gap:8px;}
-  .block .h3sub{font-size:12px;color:var(--muted);font-weight:500;margin-left:auto;}
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh-sm);position:relative;overflow:hidden;}
-  .stat .k{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:7px;} .stat .k svg{width:14px;height:14px;stroke:var(--accent);}
-  .stat .v{font-family:var(--display);font-size:27px;font-weight:800;letter-spacing:-.6px;margin-top:7px;} .stat.green .v{color:var(--accent2);}
+  .block{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;}
+  .block h3{margin:0 0 14px;font-size:14px;font-weight:850;}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;}
+  .stat .k{font-size:12px;color:var(--muted);font-weight:650;} .stat .v{font-size:26px;font-weight:850;letter-spacing:-.5px;margin-top:4px;} .stat.green .v{color:var(--accent);}
   .list{display:flex;flex-direction:column;}
   .row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line);}
   .row:last-child{border-bottom:none;}
-  .row .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--surface2);flex:none;border:1px solid var(--line);} .row .ic svg{width:16px;height:16px;}
+  .row .ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--surface);flex:none;} .row .ic svg{width:16px;height:16px;}
   .row .nm{font-size:14px;font-weight:700;} .row .dt{font-size:12px;color:var(--muted);margin-top:1px;}
-  .row .amt{margin-left:auto;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums;} .amt.pos{color:var(--accent2);} .amt.neg{color:var(--ink);}
-  .row .go{margin-left:auto;background:var(--mint);color:var(--accent2);border:1px solid var(--mint2);border-radius:10px;padding:8px 13px;font-weight:800;font-size:13px;transition:.14s;}
-  .row .go:hover{background:var(--mint2);}
-  .empty{color:var(--faint);font-size:13px;padding:18px 2px;text-align:center;}
-  .badge{font-size:11.5px;font-weight:800;padding:5px 11px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;}
+  .row .amt{margin-left:auto;font-weight:850;font-size:14px;font-variant-numeric:tabular-nums;} .amt.pos{color:var(--accent);} .amt.neg{color:var(--ink);}
+  .row .go{margin-left:auto;background:var(--okbg);color:var(--accent2);border:none;border-radius:9px;padding:8px 13px;font-weight:800;font-size:13px;}
+  .empty{color:var(--faint);font-size:13px;padding:16px 2px;}
 
-  .flabel{font-size:12.5px;font-weight:700;color:#33433c;display:block;margin-top:10px;}
-  .fld{width:100%;padding:12px 13px;border:1px solid var(--line2);border-radius:12px;font-size:14px;margin:6px 0 4px;background:var(--surface);color:var(--ink);transition:.14s;}
-  .fld:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(14,159,110,.14);}
-  .btn{border:none;border-radius:12px;padding:13px 18px;font-weight:800;font-size:14px;transition:.14s;}
-  .btn.pri{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;width:100%;box-shadow:0 8px 20px -10px rgba(14,159,110,.8);}
-  .btn.pri:hover{filter:brightness(1.04);transform:translateY(-1px);} .btn.pri:active{transform:none;}
-  .btn.sub{background:var(--surface);color:var(--ink);border:1px solid var(--line2);}
-  .btn.sub:hover{background:var(--surface2);}
-  .btn.ghost{background:none;color:var(--danger);border:1px solid var(--dangerbg);}
-  .btn.ghost:hover{background:var(--dangerbg);}
-  .note{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:12px;}
-  .codebox{font-size:25px;font-weight:800;letter-spacing:5px;text-align:center;background:var(--surface2);border:1px dashed var(--line2);border-radius:14px;padding:20px;margin-top:8px;font-variant-numeric:tabular-nums;color:var(--ink);}
-  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 10px;}
-  .seg button{border:1px solid var(--line2);background:var(--surface);border-radius:11px;padding:11px 0;font-weight:700;font-size:14px;color:var(--ink);transition:.12s;} .seg button.on{border-color:var(--accent);background:var(--mint);color:var(--accent2);}
-  .seg button:hover{border-color:var(--accent);}
+  .flabel{font-size:12.5px;font-weight:750;color:#3a463f;display:block;margin-top:8px;}
+  .fld{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;margin:5px 0 12px;background:#fff;color:var(--ink);}
+  .fld:focus{outline:none;border-color:var(--accent);}
+  .btn{border:none;border-radius:11px;padding:12px 18px;font-weight:850;font-size:14px;} .btn.pri{background:var(--accent);color:#fff;width:100%;} .btn.pri:hover{background:var(--accent2);} .btn.sub{background:var(--surface);color:var(--ink);border:1px solid var(--line);}
+  .note{font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:12px;}
+  .codebox{font-size:24px;font-weight:850;letter-spacing:5px;text-align:center;background:var(--surface);border:1px dashed #bcd0c8;border-radius:14px;padding:18px;margin-top:6px;font-variant-numeric:tabular-nums;}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 10px;}
+  .seg button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 0;font-weight:750;font-size:14px;color:var(--ink);} .seg button.on{border-color:var(--accent);background:var(--okbg);color:var(--accent2);}
 
-  /* progress */
-  .prog{height:9px;border-radius:999px;background:var(--surface3);overflow:hidden;margin:10px 0 6px;}
-  .prog>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),#3fd39a);transition:width .5s cubic-bezier(.2,.7,.3,1);}
-
-  /* bank rows */
-  .bankrow{display:flex;align-items:center;gap:13px;padding:14px;border:1px solid var(--line);border-radius:14px;margin-bottom:10px;background:var(--surface);transition:.14s;}
-  .bankrow:hover{border-color:var(--line2);box-shadow:var(--sh-sm);}
-  .bankrow .bk{width:44px;height:44px;border-radius:12px;background:linear-gradient(140deg,#0f5d44,#0a3527);display:grid;place-items:center;flex:none;}
-  .bankrow .bk svg{width:20px;height:20px;stroke:#fff;}
-  .bankrow .nm{font-size:14.5px;font-weight:800;}
-  .bankrow .dt{font-size:12px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:8px;}
-  .ftag{font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:capitalize;color:var(--accent2);background:var(--mint);border:1px solid var(--mint2);padding:2px 8px;border-radius:999px;}
-  .iconbtn{margin-left:auto;background:none;border:1px solid var(--line);border-radius:10px;width:38px;height:38px;display:grid;place-items:center;color:var(--muted);transition:.14s;flex:none;}
-  .iconbtn:hover{color:var(--danger);border-color:var(--dangerbg);background:var(--dangerbg);} .iconbtn svg{width:16px;height:16px;stroke:currentColor;}
-
-  /* ---------- Sheets / toast ---------- */
-  .backdrop{position:fixed;inset:0;background:rgba(8,18,14,.5);backdrop-filter:blur(3px);display:none;z-index:50;animation:fade .18s ease;}
-  .sheet{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(430px,92vw);background:var(--surface);border-radius:22px;padding:26px;box-shadow:var(--sh-lg);z-index:51;display:none;animation:pop .22s cubic-bezier(.2,.8,.3,1);}
-  @keyframes pop{from{opacity:0;transform:translate(-50%,-46%) scale(.97);}to{opacity:1;transform:translate(-50%,-50%) scale(1);}}
-  .sheet h3{margin:0 0 4px;font-family:var(--display);font-size:19px;font-weight:800;} .sheet .sub{color:var(--muted);font-size:13px;margin:0 0 16px;line-height:1.5;}
-  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);background:var(--ink);color:#fff;padding:13px 20px;border-radius:14px;font-size:13.5px;font-weight:600;max-width:440px;box-shadow:var(--sh-lg);display:none;z-index:60;text-align:center;opacity:0;transition:opacity .2s,transform .2s;}
-  .toast.show{display:block;opacity:1;transform:translateX(-50%) translateY(0);}
-  .toast b{color:#7ef0bf;}
+  .backdrop{position:fixed;inset:0;background:rgba(12,21,18,.45);display:none;z-index:50;}
+  .sheet{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(420px,92vw);background:#fff;border-radius:18px;padding:24px;box-shadow:0 30px 70px -24px rgba(0,0,0,.55);z-index:51;display:none;}
+  .sheet h3{margin:0 0 4px;font-size:18px;font-weight:850;} .sheet .sub{color:var(--muted);font-size:13px;margin:0 0 14px;}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-size:13.5px;max-width:420px;box-shadow:0 16px 34px -10px rgba(0,0,0,.5);display:none;z-index:60;text-align:center;}
   .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px;} @keyframes sp{to{transform:rotate(360deg);}}
-
   .mobnav{display:none;}
-  @media(max-width:860px){
-    aside{display:none;} header.top,.scroll{padding-left:16px;padding-right:16px;} .grid2{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} .scroll{padding-bottom:100px;}
-    header.top{padding-top:14px;padding-bottom:14px;}
-    .mobnav{display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:9px 4px calc(12px + env(safe-area-inset-bottom));z-index:30;}
-    .mobnav button{flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--faint);padding:4px 0;} .mobnav button svg{width:22px;height:22px;stroke:currentColor;} .mobnav button.on{color:var(--accent2);}
-  }
+  @media(max-width:820px){ aside{display:none;} header.top,.scroll{padding-left:16px;padding-right:16px;} .grid2{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} .scroll{padding-bottom:96px;}
+    .mobnav{display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.97);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:9px 0 14px;z-index:30;}
+    .mobnav button{flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--faint);} .mobnav button svg{width:21px;height:21px;stroke:currentColor;} .mobnav button.on{color:var(--accent);} }
 </style>
 </head>
 <body>
@@ -199,9 +105,8 @@
 <!-- AUTH -->
 <div class="auth" id="auth" style="display:none">
   <div class="authcard">
-    <div class="brand"><span class="mark">S</span><span>Shuk&nbsp;Gift</span></div>
-    <p class="pitch">Your store credit, rewards and linked banks — all in one beautiful wallet.</p>
-    <div class="perks"><span class="perk">⚡ Instant rewards</span><span class="perk">🔒 Bank-grade security</span><span class="perk">🎁 Welcome bonus</span></div>
+    <div class="brand"><span class="mark">S</span><span>Shuk Gift</span></div>
+    <p>Sign in to manage your store credit.</p>
     <div id="clerkSignIn"></div>
   </div>
 </div>
@@ -209,18 +114,18 @@
 <!-- APP -->
 <div class="shell" id="shell">
   <aside>
-    <div class="brand"><span class="mark">S</span><span>Shuk&nbsp;Gift</span></div>
+    <div class="brand"><span class="mark">S</span><span>Shuk Gift</span></div>
     <span class="rolepill" id="rolePill">—</span>
     <nav id="nav"></nav>
     <div class="spacer"></div>
     <div class="userchip">
-      <div class="who"><div class="av" id="avatar">·</div><div style="min-width:0"><div class="nm" id="sideName">—</div><div class="em" id="sideEmail">—</div></div></div>
+      <div class="who"><div class="av" id="avatar">·</div><div><div class="nm" id="sideName">—</div><div class="em" id="sideEmail">—</div></div></div>
       <button class="out" id="signout"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Sign out</button>
     </div>
   </aside>
   <div class="main">
     <header class="top">
-      <div><div class="title" id="pageTitle">Home</div><div class="sub" id="pageSub"></div></div>
+      <span class="title" id="pageTitle">Home</span>
       <span class="grow"></span>
       <span class="secure"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured</span>
     </header>
@@ -235,13 +140,11 @@
 <script>
   const $=id=>document.getElementById(id);
   const fmt=c=>"$"+((c||0)/100).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-  const nf=n=>(n||0).toLocaleString("en-US");
   const fmtCard=n=>n?String(n).replace(/(.{4})(?=.)/g,"$1 "):"•••• •••• •••• ••••";
   const prog=()=>(ME&&ME.program)||{};
   const brand=()=>prog().programName||"Shuk Gift";
   const store=()=>prog().storeName||"Shuk";
-  const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
-  function toast(m){const t=$("toast");t.innerHTML=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),3800);}
+  function toast(m){const t=$("toast");t.innerHTML=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",3600);}
   let clerkActive=false, ME=null, page="home", PREVIEW=null, selectedCard=null;
 
   async function api(action, body){
@@ -285,51 +188,29 @@
     const name=ME.name||(u&&u.fullName)||(ME.email||"").split("@")[0];
     $("sideName").textContent=name; $("sideEmail").textContent=ME.email||"";
     if(u&&u.imageUrl) $("avatar").innerHTML='<img src="'+u.imageUrl+'">'; else $("avatar").textContent=(name||"·").slice(0,1).toUpperCase();
-    $("rolePill").textContent = ME.role==="admin" ? "Platform admin" : ME.role==="store" ? "Store" : "Member";
+    $("rolePill").textContent = ME.role==="admin" ? "PLATFORM ADMIN" : ME.role==="store" ? "STORE" : "CUSTOMER";
     if(page==="program" && ME.role!=="admin") page="home";
-    if(page==="wallet" && ME.role!=="customer") page="home";
     buildNav(); render();
-    if(ME.autoReloaded && ME.autoReloaded.amount){ toast("Auto top-up added <b>"+fmt(ME.autoReloaded.amount)+"</b> to your card."); ME.autoReloaded=null; }
   }
 
   function buildNav(){
     const gear='<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>';
     let items;
     if(ME.role==="customer"){
-      items=[
-        ["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],
-        ["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],
-        ["wallet","Wallet",'<rect x="2" y="6" width="20" height="13" rx="3"/><path d="M16 12h4"/><path d="M2 9h14"/>'],
-        ["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],
-        ["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']
-      ];
+      items=[["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']];
     } else {
-      items=[
-        ["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],
-        ["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],
-        ["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],
-        ["activity","Transactions",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']
-      ];
+      // store + admin share the operations nav; admin also gets Settings.
+      items=[["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Transactions",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']];
       if(ME.role==="admin") items.push(["program","Settings",gear]);
     }
-    const mk=(id,label,svg)=>'<button class="'+(page===id?"on":"")+'" data-go="'+id+'"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+svg+'</svg>'+label+'</button>';
-    $("nav").innerHTML=items.map(i=>mk(i[0],i[1],i[2])).join("");
-    $("mobnav").innerHTML=items.map(i=>mk(i[0],i[1],i[2])).join("");
+    const mk=(id,label,svg,cls)=>'<button class="'+(page===id?cls:"")+'" data-go="'+id+'"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+svg+'</svg>'+label+'</button>';
+    $("nav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
+    $("mobnav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
   }
-  document.body.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g){ page=g.getAttribute("data-go"); window.scrollTo&&window.scrollTo(0,0); buildNav(); render(); } });
+  document.body.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g){ page=g.getAttribute("data-go"); buildNav(); render(); } });
 
   /* ---------- Render ---------- */
-  const titles={
-    home:ME=>ME.role==="admin"?"Platform overview":ME.role==="store"?"Store dashboard":"My card",
-    checkout:()=>"Charge a card",customers:()=>"Gift cards",
-    activity:ME=>ME.role!=="customer"?"Transactions":"Activity",
-    preview:()=>"Customer view",rewards:()=>"Rewards",wallet:()=>"Wallet",settings:()=>"Account",program:()=>"Program & rewards"};
-  const subs={
-    home:ME=>ME.role==="customer"?("Welcome back, "+((ME.name||ME.email||"").split("@")[0].split(" ")[0])):"",
-    rewards:()=>"Turn points into store credit",
-    wallet:()=>"Linked bank accounts & funding",
-    activity:()=>"Every transaction on your account",
-    settings:()=>"Profile, card & security"};
+  const titles={home:ME=>ME.role==="admin"?"Platform overview":ME.role==="store"?"Store dashboard":"My card",checkout:()=>"Charge a card",customers:()=>"Gift cards",activity:ME=>ME.role!=="customer"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
   function txLabel(t){
     const c=t.cat||"", pos=(t.amount||0)>0;
     if(c.indexOf("ach")>=0) return pos?"Bank transfer":"Bank withdrawal";
@@ -339,203 +220,72 @@
   }
   function actRow(t){
     const pos=(t.amount||0)>0;
-    const stroke=pos?"#0e9f6e":"#5a6b64";
+    const stroke=pos?"#0e9f6e":"#5d6b65";
     const path=pos?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>';
     const label=txLabel(t);
-    return '<div class="row"><div class="ic" style="background:'+(pos?"var(--mint)":"var(--surface2)")+'"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+'</div><div class="dt">'+esc(t.when||"")+'</div></div><div class="amt '+(pos?"pos":"neg")+'">'+(pos?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>';
+    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(pos?"pos":"neg")+'">'+(pos?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>';
   }
   function merchRow(t){
     const sale=(t.amount||0)<0;
-    const stroke=sale?"#5a6b64":"#0e9f6e";
+    const stroke=sale?"#5d6b65":"#0e9f6e";
     const path=sale?'<path d="M12 19V5M5 12l7-7 7 7"/>':'<path d="M12 5v14M5 12l7 7 7-7"/>';
     const label=t.who||(sale?"Sale":"Load");
-    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+esc(label)+(t.email?' · '+esc(t.email):'')+'</div><div class="dt">'+esc(t.when||"")+'</div></div><div class="amt '+(sale?"neg":"pos")+'">'+(sale?"−":"+")+fmt(Math.abs(t.amount))+'</div></div>';
+    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+(t.email?' · '+t.email:'')+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(sale?"neg":"pos")+'">'+(sale?"−":"+")+fmt(Math.abs(t.amount))+'</div></div>';
   }
   function render(){
     $("pageTitle").textContent=(titles[page]||(()=>"Shuk Gift"))(ME);
-    const sb=subs[page]?subs[page](ME):""; $("pageSub").textContent=sb; $("pageSub").style.display=sb?"block":"none";
-    const s=$("scroll"); s.classList.remove("view"); void s.offsetWidth; s.classList.add("view");
+    const s=$("scroll");
     if(ME.role!=="customer") return renderMerchant(s);
     return renderCustomer(s);
-  }
-
-  /* card 3D tilt + shine */
-  function wireCard(el){
-    if(!el) return;
-    el.parentElement&&el.parentElement.addEventListener("mousemove",e=>{
-      const r=el.getBoundingClientRect(), x=(e.clientX-r.left)/r.width-.5, y=(e.clientY-r.top)/r.height-.5;
-      el.style.transform="rotateY("+(x*7).toFixed(2)+"deg) rotateX("+(-y*7).toFixed(2)+"deg) translateY(-2px)";
-    });
-    el.parentElement&&el.parentElement.addEventListener("mouseleave",()=>{ el.style.transform=""; });
-    setTimeout(()=>{ el.classList.add("shine"); setTimeout(()=>el.classList.remove("shine"),1200); },220);
-  }
-  function giftCardHTML(opts){
-    const o=opts||{};
-    return '<div class="cardwrap"><div class="gc'+(o.rewards?" rewards":"")+'" id="'+(o.id||"gcard")+'"><div class="mesh"></div><div class="grain"></div>'+
-      '<div class="r1"><span class="nm"><span class="dot">S</span>'+esc(o.brand||brand())+'</span>'+
-      '<svg class="wifi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M5 12a9 9 0 0 1 14 0" opacity=".5"/><path d="M8.5 15a5 5 0 0 1 7 0" opacity=".75"/><path d="M11.5 18h1"/></svg></div>'+
-      (o.rewards?'':'<div class="chip"></div>')+
-      '<div class="lbl">'+esc(o.lbl||"Card balance")+'</div><div class="bal">'+o.bal+'</div>'+
-      '<div class="num">'+(o.num||fmtCard(o.cardNumber))+'</div>'+
-      '<div class="foot"><span><span class="vlabel">'+esc(o.footLeftLabel||"CARDHOLDER")+'</span><br>'+esc(o.footLeft||"")+'</span><span style="text-align:right"><span class="vlabel">'+esc(o.footRightLabel||"")+'</span><br>'+esc(o.footRight||"")+'</span></div>'+
-      '</div></div>';
   }
 
   /* ----- Customer ----- */
   function renderCustomer(s){
     const txns=ME.transactions||[];
     if(page==="activity"){
-      s.innerHTML='<div class="block"><h3>Activity<span class="h3sub">'+txns.length+' record'+(txns.length===1?"":"s")+'</span></h3><div class="list">'+(txns.length?txns.map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
+      s.innerHTML='<div class="block"><h3>Activity</h3><div class="list">'+(txns.length?txns.map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
       return;
     }
     if(page==="rewards"){ renderRewards(s); return; }
-    if(page==="wallet"){ renderWallet(s); return; }
     if(page==="settings"){ renderSettings(s); return; }
     const p=prog();
-    const name=(ME.name||ME.email||"");
     let banner="";
     if(!ME.firstLoadBonusUsed && p.firstLoadBonusPercent>0){
       const min=(p.firstLoadMinCents||0)/100, cap=(p.firstLoadBonusCapCents||0)/100;
-      banner='<div class="block" style="margin-bottom:18px;background:linear-gradient(125deg,#0e9f6e,#0a3527);color:#fff;border:none;overflow:hidden;position:relative">'+
-        '<div style="position:absolute;right:-30px;top:-30px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.10)"></div>'+
-        '<div style="display:flex;align-items:center;gap:14px;position:relative"><div style="width:46px;height:46px;border-radius:13px;background:rgba(255,255,255,.18);display:grid;place-items:center;flex:none"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18"/><path d="M12 8C12 5 10 3 8 4s0 4 4 4zM12 8c0-3 2-5 4-4s0 4-4 4z"/></svg></div>'+
-        '<div><div style="font-family:var(--display);font-weight:800;font-size:16px">Your welcome bonus is waiting</div><div style="font-size:13px;opacity:.94;margin-top:2px">Load $'+min+'+ on your first top-up and get '+p.firstLoadBonusPercent+'% extra free'+(cap>0?(" — up to $"+cap):"")+'.</div></div>'+
-        '<button class="btn sub" id="bannerAdd" style="margin-left:auto;width:auto;white-space:nowrap;background:#fff;color:var(--accent2);border:none">Add funds</button></div></div>';
+      banner='<div class="block" style="margin-bottom:18px;background:linear-gradient(120deg,#0e9f6e,#0b8a5f);color:#fff;border:none"><div style="display:flex;align-items:center;gap:13px"><div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.18);display:grid;place-items:center;flex:none"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18"/><path d="M12 8C12 5 10 3 8 4s0 4 4 4zM12 8c0-3 2-5 4-4s0 4-4 4z"/></svg></div><div><div style="font-weight:850;font-size:15px">Welcome bonus</div><div style="font-size:13px;opacity:.94">Load $'+min+'+ and get '+p.firstLoadBonusPercent+'% extra free on your first load'+(cap>0?(" (up to $"+cap+")"):"")+'.</div></div></div></div>';
     }
     s.innerHTML= banner+
+      '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn '+(p.rewardsPercent||0)+'% back every time you pay at '+store()+'.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(ME.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
       '<div class="grid2"><div>'+
-        giftCardHTML({bal:fmt(ME.balance),cardNumber:ME.cardNumber,footLeft:name.toUpperCase(),footRightLabel:"VALID",footRight:"STORE CREDIT"})+
+        '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">'+brand()+'</span><span class="tag">STORE CREDIT</span></div>'+
+        '<div class="lbl">Card balance</div><div class="bal">'+fmt(ME.balance)+'</div>'+
+        '<div style="margin-top:18px;font-size:17px;letter-spacing:2.5px;font-variant-numeric:tabular-nums;font-weight:700">'+fmtCard(ME.cardNumber)+'</div>'+
+        '<div class="foot"><span>'+((ME.name||ME.email||"").toUpperCase())+'</span><span>'+brand().toUpperCase()+'</span></div></div>'+
         '<div class="actions"><button class="act" id="addFunds"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>Add funds</button>'+
-        '<button class="act" id="payBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 21h.01M17 21h.01M21 17h.01"/></svg></span>Pay in store</button></div>'+
-        '<p class="note">🔒 Store credit is spendable only at '+esc(store())+'. It can’t be transferred to other people or cashed out.</p>'+
-      '</div><div>'+
-        '<div class="block" style="background:linear-gradient(135deg,#0a3527,#10543d);color:#fff;border:none;margin-bottom:16px">'+
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><div style="font-size:12px;opacity:.8;font-weight:700;letter-spacing:.4px;text-transform:uppercase">Loyalty points</div><div style="font-family:var(--display);font-size:34px;font-weight:800;letter-spacing:-1px;margin-top:4px">'+nf(ME.points||0)+' <span style="font-size:15px;opacity:.75;font-weight:700">pts</span></div><div style="font-size:12.5px;opacity:.85;margin-top:2px">Worth '+fmt(ME.points||0)+' in store credit</div></div>'+
-          '<button class="btn sub" id="goRewards" style="width:auto;background:rgba(255,255,255,.16);color:#fff;border:none;align-self:flex-start;white-space:nowrap">Redeem →</button></div>'+
-          '<div style="margin-top:14px;font-size:12.5px;opacity:.9;display:flex;align-items:center;gap:7px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7ef0bf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg>Earn <b style="margin:0 3px">'+(p.rewardsPercent||0)+'% back</b> every time you pay at '+esc(store())+'</div>'+
-        '</div>'+
-        '<div class="block"><h3>Recent activity<button class="go" data-go="activity" style="margin-left:auto">View all</button></h3><div class="list">'+(txns.length?txns.slice(0,5).map(actRow).join(""):'<div class="empty">No activity yet. Add funds to get started.</div>')+'</div></div>'+
-      '</div></div>';
-    wireCard($("gcard"));
+        '<button class="act" id="payBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Pay in store</button></div>'+
+        '<p class="note">Store credit is spendable only at '+store()+'. It can’t be transferred to other people or cashed out.</p>'+
+      '</div><div class="block"><h3>Recent activity</h3><div class="list">'+(txns.length?txns.slice(0,6).map(actRow).join(""):'<div class="empty">No activity yet. Add funds to get started.</div>')+'</div></div></div>';
     $("addFunds").addEventListener("click",openAdd);
     $("payBtn").addEventListener("click",openPay);
-    var br=$("goRewards"); if(br) br.addEventListener("click",()=>{ page="rewards"; buildNav(); render(); });
-    var ba=$("bannerAdd"); if(ba) ba.addEventListener("click",openAdd);
   }
 
   /* ----- Customer: Rewards / Redeem ----- */
   function renderRewards(s){
     const pts=ME.points||0, p=prog(), minPts=p.redeemMinPoints||100;
-    const nextStep=100, toNext=pts<minPts?(minPts-pts):(nextStep-(pts%nextStep||nextStep));
-    const pctToNext=pts<minPts?Math.round(pts/minPts*100):Math.round(((pts%nextStep||nextStep))/nextStep*100);
     s.innerHTML=
       '<div class="grid2"><div>'+
-        giftCardHTML({rewards:true,id:"rcard",brand:"Rewards",lbl:"Points balance",bal:nf(pts)+' <span style="font-size:18px;opacity:.8">pts</span>',num:"WORTH "+fmt(pts),footLeftLabel:"EARN RATE",footLeft:(p.rewardsPercent||0)+"% back",footRightLabel:"VALUE",footRight:"100 PTS = $1.00"})+
-        '<div class="block" style="margin-top:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:700"><span>'+(pts<minPts?("Almost ready to redeem"):("Next $1 of credit"))+'</span><span style="color:var(--muted)">'+(pts<minPts?(minPts-pts)+" pts to go":toNext+" pts to go")+'</span></div><div class="prog"><span style="width:'+Math.min(100,pctToNext)+'%"></span></div><p class="note" style="margin-top:6px">You earn '+(p.rewardsPercent||0)+'% back every time you pay at '+esc(store())+'. Every 100 points becomes $1.00 of store credit.</p></div>'+
+        '<div class="gc" style="background:radial-gradient(130% 130% at 100% 0%,#2a6f4f 0%,#155a3f 45%,#0b3b2e 100%)"><div class="deco"></div><div class="r1"><span class="nm">Rewards</span><span class="tag">LOYALTY</span></div><div class="lbl">Points balance</div><div class="bal">'+pts+' <span style="font-size:18px;opacity:.8">pts</span></div><div class="foot"><span>WORTH '+fmt(pts)+'</span><span>100 PTS = $1.00</span></div></div>'+
+        '<p class="note">You earn '+(p.rewardsPercent||0)+'% back every time you pay at '+store()+'. Redeem points for store credit anytime — every 100 points becomes $1.00 on your card.</p>'+
       '</div><div class="block"><h3>Redeem points</h3>'+
         '<label class="flabel">Points to redeem</label><div class="seg" id="rq"><button data-q="'+minPts+'">'+minPts+'</button><button data-q="500">500</button><button data-q="1000">1,000</button><button data-q="'+pts+'">All</button></div>'+
         '<input class="fld" id="rpts" type="number" min="'+minPts+'" step="100" placeholder="e.g. 500" />'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 2px 12px;border-top:1px solid var(--line);margin-top:8px"><span class="note" style="margin:0">Store credit you’ll receive</span><span id="rval" style="font-family:var(--display);font-weight:800;font-size:20px;color:var(--accent2)">$0.00</span></div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 12px"><span class="note" style="margin:0">Store credit you’ll receive</span><span id="rval" style="font-weight:850;font-size:16px">$0.00</span></div>'+
         '<button class="btn pri" id="rgo">Redeem for store credit</button>'+
-        '<p class="note">Minimum '+minPts+' points ($'+(minPts/100).toFixed(2)+') per redemption. Redeemed credit lands on your card instantly.</p></div></div>';
-    wireCard($("rcard"));
+        '<p class="note">Minimum '+minPts+' points ($'+(minPts/100).toFixed(2)+') per redemption.</p></div></div>';
     const calc=()=>{ const v=Math.floor(parseFloat($("rpts").value)||0); $("rval").textContent=fmt(v>0?v:0); };
     s.querySelectorAll("#rq button").forEach(b=>b.addEventListener("click",()=>{ $("rpts").value=b.getAttribute("data-q"); s.querySelectorAll("#rq button").forEach(x=>x.classList.toggle("on",x===b)); calc(); }));
     $("rpts").addEventListener("input",calc);
-    $("rgo").addEventListener("click",async()=>{ const v=Math.floor(parseFloat($("rpts").value)||0); if(v<minPts){ toast("Redeem at least "+minPts+" points."); return; } const g=$("rgo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("redeem",{points:v}); if(r&&r.ok){ toast("Redeemed "+nf(v)+" pts → <b>"+fmt(r.credited)+"</b> store credit."); await refresh(); page="home"; buildNav(); render(); } else { toast(r&&r.error?r.error:"Could not redeem."); g.disabled=false; g.textContent="Redeem for store credit"; } });
-  }
-
-  /* ----- Customer: Wallet (linked bank accounts) ----- */
-  async function renderWallet(s){
-    s.innerHTML='<div class="block"><div class="empty"><span class="spin" style="border-color:rgba(14,159,110,.3);border-top-color:var(--accent)"></span> Loading your wallet…</div></div>';
-    const st=await api("bankStatus");
-    if(page!=="wallet") return;
-    const banks=(st&&st.banks)||[];
-    const bankCard=b=>{
-      const ftype=(b.funding||"checking");
-      return '<div class="bankrow"><div class="bk"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M4 10v9M20 10v9M9 10v9M15 10v9M3 21h18"/></svg></div>'+
-        '<div style="min-width:0"><div class="nm">Bank account •••• '+esc(b.last4||"")+'</div><div class="dt"><span class="ftag">'+esc(ftype)+'</span>'+(b.routingLast4?'<span>Routing •••'+esc(b.routingLast4)+'</span>':'')+'</div></div>'+
-        '<button class="iconbtn" data-rm="'+esc(b.id)+'" title="Remove bank"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>';
-    };
-    s.innerHTML=
-      '<div class="grid2"><div>'+
-        '<div class="block"><h3>Linked bank accounts<span class="h3sub">'+banks.length+' linked</span></h3>'+
-          (banks.length?banks.map(bankCard).join(""):'<div style="text-align:center;padding:22px 6px"><div style="width:56px;height:56px;border-radius:16px;background:var(--mint);display:grid;place-items:center;margin:0 auto 12px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M4 10v9M20 10v9M3 21h18"/></svg></div><div style="font-weight:800;font-size:15px">No banks linked yet</div><p class="note" style="margin-top:4px">Link a bank account to load funds onto your card by ACH.</p></div>')+
-          '<button class="btn pri" id="addBank" style="margin-top:6px">+ Link a bank account</button>'+
-          '<p class="note">🔒 Your bank details are sent securely to our banking partner to enable ACH transfers and are never stored in the app.</p>'+
-        '</div>'+
-      '</div><div>'+
-        autoCard()+
-        '<div class="block" style="margin-bottom:16px"><h3>Fund your card</h3><div class="row" style="border:none;padding-top:4px"><div class="ic" style="background:var(--mint)"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div><div><div class="nm">Add funds by ACH</div><div class="dt">Pull money from a linked bank to your card</div></div><button class="go" id="walletAdd" style="margin-left:auto">Add funds</button></div></div>'+
-        '<div class="block"><h3>How linking works</h3><div class="list">'+
-          '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M4 10v9M20 10v9M3 21h18"/></svg></div><div><div class="nm">1 · Link your bank</div><div class="dt">Add your routing & account number once.</div></div></div>'+
-          '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div><div><div class="nm">2 · Add funds anytime</div><div class="dt">Transfer money to your card by ACH.</div></div></div>'+
-          '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><div><div class="nm">3 · Earn & spend</div><div class="dt">Spend at '+esc(store())+' and earn points back.</div></div></div>'+
-        '</div></div>'+
-      '</div></div>';
-    $("addBank").addEventListener("click",()=>openLinkBank(()=>{ page="wallet"; render(); }));
-    $("walletAdd").addEventListener("click",openAdd);
-    var ea=$("editAuto"); if(ea) ea.addEventListener("click",()=>openAutoReload(banks));
-    s.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>removeBank(b.getAttribute("data-rm"),b)));
-  }
-  function autoDesc(a){
-    if(!a||!a.enabled) return "Off — turn on to never run out of credit.";
-    const amt=fmt(a.amountCents||0);
-    if(a.mode==="low") return "Reloads "+amt+" whenever your balance drops below "+fmt(a.thresholdCents||0)+".";
-    if(a.mode==="weekly") return "Reloads "+amt+" automatically every week.";
-    if(a.mode==="monthly") return "Reloads "+amt+" automatically every month.";
-    return "On.";
-  }
-  function autoCard(){
-    const a=(ME&&ME.autoReload)||{enabled:false};
-    const on=!!a.enabled;
-    return '<div class="block" style="margin-bottom:16px;'+(on?'border-color:var(--mint2);background:linear-gradient(180deg,var(--mint),#fff 60%)':'')+'">'+
-      '<h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v5h-5"/></svg>Auto top-up'+
-        '<span class="badge" style="margin-left:auto;background:'+(on?"var(--mint)":"var(--surface2)")+';color:'+(on?"var(--accent2)":"var(--faint)")+';border:1px solid '+(on?"var(--mint2)":"var(--line)")+'">'+(on?"On":"Off")+'</span></h3>'+
-      '<p class="note" style="margin-top:0;font-size:13px;color:var(--ink)">'+autoDesc(a)+'</p>'+
-      '<button class="btn '+(on?'sub':'pri')+'" id="editAuto" style="margin-top:6px">'+(on?"Manage auto top-up":"Set up auto top-up")+'</button>'+
-      '<p class="note">Never run out of store credit — we’ll reload it for you from your linked bank.</p></div>';
-  }
-  function openAutoReload(banks){
-    if(!banks||!banks.length){ openLinkBank(()=>{ page="wallet"; render(); }); toast("Link a bank first to enable auto top-up."); return; }
-    const a=(ME&&ME.autoReload)||{enabled:false,mode:"low",amountCents:5000,thresholdCents:5000};
-    const amt=((a.amountCents||5000)/100), thr=((a.thresholdCents||5000)/100), mode=a.mode||"low";
-    const {el,close}=sheet(
-      '<h3>Auto top-up</h3><p class="sub">Automatically reload your card from your linked bank so you never run out of store credit.</p>'+
-      '<div style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:12px"><div style="flex:1"><div style="font-weight:800;font-size:14px">Enable auto top-up</div><div class="note" style="margin:0">Turn the whole feature on or off.</div></div><input type="checkbox" id="aEn" '+(a.enabled?"checked":"")+' style="width:22px;height:22px;accent-color:#0e9f6e"></div>'+
-      '<label class="flabel">When should we reload?</label><div class="seg" id="aMode" style="grid-template-columns:repeat(3,1fr)"><button data-m="low" class="'+(mode==="low"?"on":"")+'">Low balance</button><button data-m="weekly" class="'+(mode==="weekly"?"on":"")+'">Weekly</button><button data-m="monthly" class="'+(mode==="monthly"?"on":"")+'">Monthly</button></div>'+
-      '<div id="aThrWrap"><label class="flabel">Reload when balance drops below</label><div class="seg" id="aThrQ"><button data-q="25">$25</button><button data-q="40">$40</button><button data-q="50">$50</button><button data-q="75">$75</button></div><input class="fld" id="aThr" type="number" min="1" step="1" value="'+thr+'" /></div>'+
-      '<label class="flabel">Amount to reload each time</label><div class="seg" id="aAmtQ"><button data-q="25">$25</button><button data-q="50">$50</button><button data-q="100">$100</button><button data-q="200">$200</button></div><input class="fld" id="aAmt" type="number" min="1" step="1" value="'+amt+'" />'+
-      '<div class="block" id="aPrev" style="background:var(--mint);border:1px solid var(--mint2);margin:6px 0 12px;font-size:13px;color:var(--accent2);font-weight:700"></div>'+
-      '<button class="btn pri" id="aSave">Save auto top-up</button>'+
-      (a.enabled?'<button class="btn ghost" id="aOff" style="width:100%;margin-top:8px">Turn off auto top-up</button>':'')+
-      '<button class="btn sub" id="aCx" style="width:100%;margin-top:8px">Cancel</button>'+
-      '<p class="note">From your bank •••• '+esc((banks[0]&&banks[0].last4)||"")+' by ACH. Max $2,000 per reload. You can change or cancel anytime.</p>');
-    let curMode=mode;
-    const syncMode=()=>{ el.querySelector("#aThrWrap").style.display=curMode==="low"?"block":"none"; prev(); };
-    const prev=()=>{ const A=fmt(Math.round((parseFloat(el.querySelector("#aAmt").value)||0)*100)); let t; if(curMode==="low"){ t="Reload "+A+" whenever balance drops below "+fmt(Math.round((parseFloat(el.querySelector("#aThr").value)||0)*100)); } else { t="Reload "+A+" automatically every "+(curMode==="weekly"?"week":"month"); } el.querySelector("#aPrev").textContent=t+"."; };
-    el.querySelectorAll("#aMode button").forEach(b=>b.addEventListener("click",()=>{ curMode=b.getAttribute("data-m"); el.querySelectorAll("#aMode button").forEach(x=>x.classList.toggle("on",x===b)); syncMode(); }));
-    el.querySelectorAll("#aThrQ button").forEach(b=>b.addEventListener("click",()=>{ el.querySelector("#aThr").value=b.getAttribute("data-q"); prev(); }));
-    el.querySelectorAll("#aAmtQ button").forEach(b=>b.addEventListener("click",()=>{ el.querySelector("#aAmt").value=b.getAttribute("data-q"); prev(); }));
-    el.querySelector("#aThr").addEventListener("input",prev); el.querySelector("#aAmt").addEventListener("input",prev);
-    el.querySelector("#aCx").addEventListener("click",close);
-    syncMode();
-    const save=async(enabled)=>{
-      const amountCents=Math.round((parseFloat(el.querySelector("#aAmt").value)||0)*100);
-      const thresholdCents=Math.round((parseFloat(el.querySelector("#aThr").value)||0)*100);
-      if(enabled){ if(amountCents<=0){ toast("Enter a reload amount."); return; } if(amountCents>200000){ toast("Max $2,000 per reload."); return; } if(curMode==="low"&&thresholdCents<=0){ toast("Enter a low-balance threshold."); return; } }
-      const g=el.querySelector(enabled?"#aSave":"#aOff"); g.disabled=true; g.innerHTML='<span class="spin"></span>';
-      const r=await api("setAutoReload",{enabled,mode:curMode,amountCents,thresholdCents});
-      if(r&&r.ok){ ME.autoReload=r.autoReload; close(); toast(enabled?"Auto top-up saved.":"Auto top-up turned off."); render(); }
-      else { toast(r&&r.error?r.error:"Could not save."); g.disabled=false; g.textContent=enabled?"Save auto top-up":"Turn off auto top-up"; }
-    };
-    el.querySelector("#aSave").addEventListener("click",()=>save(el.querySelector("#aEn").checked));
-    var off=el.querySelector("#aOff"); if(off) off.addEventListener("click",()=>save(false));
-  }
-  async function removeBank(id,btn){
-    const c=sheet('<h3>Remove this bank?</h3><p class="sub">You can re-link it anytime. Pending transfers are not affected.</p><button class="btn ghost" id="rmYes" style="width:100%">Remove bank account</button><button class="btn sub" id="rmNo" style="width:100%;margin-top:8px">Keep it</button>');
-    c.el.querySelector("#rmNo").addEventListener("click",c.close);
-    c.el.querySelector("#rmYes").addEventListener("click",async()=>{ const g=c.el.querySelector("#rmYes"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("removeBank",{bankId:id}); if(r&&r.ok){ c.close(); toast("Bank account removed."); render(); } else { toast(r&&r.error?r.error:"Could not remove bank."); g.disabled=false; g.textContent="Remove bank account"; } });
+    $("rgo").addEventListener("click",async()=>{ const v=Math.floor(parseFloat($("rpts").value)||0); if(v<minPts){ toast("Redeem at least "+minPts+" points."); return; } const g=$("rgo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("redeem",{points:v}); if(r&&r.ok){ toast("Redeemed "+v+" pts → "+fmt(r.credited)+" store credit."); await refresh(); page="home"; buildNav(); render(); } else { toast(r&&r.error?r.error:"Could not redeem."); g.disabled=false; g.textContent="Redeem for store credit"; } });
   }
 
   /* ----- Customer: Account settings ----- */
@@ -543,23 +293,21 @@
     const line=(k,v)=>'<div class="row"><div><div class="dt">'+k+'</div><div class="nm">'+v+'</div></div></div>';
     s.innerHTML=
       '<div class="grid2"><div class="block"><h3>Account</h3>'+
-        line("Name",esc(ME.name||"—"))+line("Email",esc(ME.email||"—"))+
+        line("Name",ME.name||"—")+line("Email",ME.email||"—")+
         '<div class="row"><div><div class="dt">Card number</div><div class="nm" style="font-variant-numeric:tabular-nums;letter-spacing:1px">'+fmtCard(ME.cardNumber)+'</div></div></div>'+
-        '<div class="row" style="border:none"><div><div class="dt">Balance & points</div><div class="nm">'+fmt(ME.balance)+' · '+nf(ME.points||0)+' pts</div></div></div>'+
-        '<button class="btn sub" id="mgBtn" style="width:100%;margin-top:14px">Manage profile &amp; security</button>'+
+        '<div class="row" style="border:none"><div><div class="dt">Current balance</div><div class="nm">'+fmt(ME.balance)+' · '+(ME.points||0)+' pts</div></div></div>'+
+        '<button class="btn sub" id="mgBtn" style="width:100%;margin-top:12px">Manage profile &amp; security</button>'+
         '<button class="btn sub" id="soBtn" style="width:100%;margin-top:8px">Sign out</button>'+
-      '</div><div>'+
-        giftCardHTML({bal:fmt(ME.balance),cardNumber:ME.cardNumber,footLeft:(ME.name||ME.email||"").toUpperCase(),footRightLabel:"VALID",footRight:"STORE CREDIT",id:"scard"})+
-        '<p class="note">Show this card number at the register to pay with your '+esc(store())+' store credit. Store credit isn’t transferable and can’t be cashed out. You earn '+(prog().rewardsPercent||0)+'% back — redeem points for credit on the Rewards page.</p>'+
-        '<div class="block" style="margin-top:16px"><h3>Phone &amp; text banking</h3>'+
-          '<p class="note" style="margin:0 0 10px">Call or text our number to hear your balance and add money. Register your phone and a 4-digit PIN to use it.</p>'+
-          '<div class="row" style="border:none;padding-top:2px"><div class="ic" style="background:var(--mint)"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><div><div class="nm">'+(ME.ivrPinSet?("Active"+(ME.phone?(" · "+esc(ME.phone)):"")):"Not set up")+'</div><div class="dt">Phone &amp; text banking</div></div><button class="go" id="ivrBtn" style="margin-left:auto">'+(ME.ivrPinSet?"Update":"Set up")+'</button></div>'+
-        '</div>'+
+      '</div><div class="block"><h3>Your card</h3>'+
+        '<div class="codebox" style="letter-spacing:2px;font-size:18px">'+fmtCard(ME.cardNumber)+'</div>'+
+        '<p class="note">Show this card number at the register to pay with your '+store()+' store credit. Store credit isn’t transferable and can’t be cashed out. You earn '+(prog().rewardsPercent||0)+'% back — redeem points for credit on the Rewards page.</p>'+
+        '<h3 style="margin-top:16px">Phone &amp; text banking</h3>'+
+        '<p class="note" style="margin:0 0 8px">Call or text our number to hear your balance and add money. Register your phone and a 4-digit PIN to use it.</p>'+
+        '<div class="row" style="border:none"><div><div class="dt">Status</div><div class="nm">'+(ME.ivrPinSet?("Active"+(ME.phone?(" · "+ME.phone):"")):"Not set up")+'</div></div><button class="go" id="ivrBtn" style="margin-left:auto">'+(ME.ivrPinSet?"Update":"Set up")+'</button></div>'+
       '</div></div>';
-    wireCard($("scard"));
     $("mgBtn").addEventListener("click",()=>{ try{ if(window.Clerk&&Clerk.openUserProfile){ Clerk.openUserProfile(); } else { toast("Profile management isn’t available."); } }catch(e){ toast("Profile management isn’t available."); } });
     $("soBtn").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
-    var ivb=$("ivrBtn"); if(ivb) ivb.addEventListener("click",openIvr);
+    $("ivrBtn").addEventListener("click",openIvr);
   }
 
   /* ----- Merchant ----- */
@@ -571,32 +319,36 @@
       const p=PREVIEW, pt=p.transactions||[];
       s.innerHTML=
         '<button class="btn sub" id="pvBack" style="width:auto;margin-bottom:14px">← Back to cards</button>'+
-        '<p class="note" style="margin:0 0 14px">This is exactly what <b>'+esc(p.email)+'</b> sees when they sign in to their own app.</p>'+
-        '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn '+(prog().rewardsPercent||0)+'% back at '+esc(store())+'.</span></div><div style="font-family:var(--display);font-size:30px;font-weight:800;color:var(--accent2);white-space:nowrap">'+nf(p.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
+        '<p class="note" style="margin:0 0 14px">This is exactly what <b>'+p.email+'</b> sees when they sign in to their own app.</p>'+
+        '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn '+(prog().rewardsPercent||0)+'% back at '+store()+'.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(p.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
         '<div class="grid2"><div>'+
-          giftCardHTML({bal:fmt(p.balance),cardNumber:p.cardNumber,footLeft:(p.email||"").toUpperCase(),footRightLabel:"VALID",footRight:"STORE CREDIT",id:"pcard"})+
+          '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">'+brand()+'</span><span class="tag">STORE CREDIT</span></div>'+
+          '<div class="lbl">Card balance</div><div class="bal">'+fmt(p.balance)+'</div>'+
+          '<div style="margin-top:18px;font-size:16px;letter-spacing:2px;font-variant-numeric:tabular-nums;font-weight:700">'+fmtCard(p.cardNumber)+'</div>'+
+          '<div class="foot"><span>'+((p.email||"").toUpperCase())+'</span><span>'+brand().toUpperCase()+'</span></div></div>'+
         '</div><div class="block"><h3>Recent activity</h3><div class="list">'+(pt.length?pt.slice(0,8).map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div></div>';
-      wireCard($("pcard"));
       $("pvBack").addEventListener("click",()=>{ PREVIEW=null; page="customers"; buildNav(); render(); });
       return;
     }
     if(page==="activity"){
-      s.innerHTML='<div class="block"><h3 style="margin:0 0 12px">All transactions<span class="h3sub">'+txns.length+' record'+(txns.length===1?"":"s")+'</span></h3><div class="list">'+(txns.length?txns.map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">All transactions</h3><span class="note" style="margin:0">'+txns.length+' record'+(txns.length===1?"":"s")+'</span></div><div class="list">'+(txns.length?txns.map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
       return;
     }
     if(page==="customers"){
-      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">Gift cards ('+cards.length+')</h3><button class="btn pri" id="issueBtn" style="width:auto;padding:9px 14px;font-size:13px">+ Issue / load card</button></div><div class="list">'+(cards.length?cards.map(c=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><div><div class="nm">'+esc(c.email)+'</div><div class="dt">'+fmtCard(c.cardNumber)+'</div></div><span class="amt pos" style="margin-left:auto">'+fmt(c.balance)+'</span><button class="go" data-view="'+c.id+'" style="margin-left:14px;background:var(--surface2);color:var(--ink);border-color:var(--line)">View</button><button class="go" data-charge="'+c.id+'" style="margin-left:8px">Charge</button></div>').join(""):'<div class="empty">No gift cards yet. Issue one above, or customers appear here after they sign in.</div>')+'</div></div>';
+      var genHtml = ME.isAdmin ? '<button class="btn sub" id="genBtn" style="width:auto;padding:8px 13px;font-size:13px;margin-right:8px">Generate cards</button>' : '';
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Gift cards ('+cards.length+')</h3><div>'+genHtml+'<button class="btn pri" id="issueBtn" style="width:auto;padding:8px 13px;font-size:13px">+ Issue / load card</button></div></div>'+(ME.isAdmin?'<p class="note" style="margin:0 0 6px">Printed cards activated by phone appear here by their card number once a customer claims them.</p>':'')+'<div class="list">'+(cards.length?cards.map(c=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><div><div class="nm">'+c.email+'</div><div class="dt">'+fmtCard(c.cardNumber)+'</div></div><span class="amt pos" style="margin-left:auto">'+fmt(c.balance)+'</span><button class="go" data-view="'+c.id+'" style="margin-left:14px;background:var(--surface);color:var(--ink)">View</button><button class="go" data-charge="'+c.id+'" style="margin-left:8px">Charge</button></div>').join(""):'<div class="empty">No gift cards yet. Issue one above, or customers appear here after they sign in.</div>')+'</div></div>';
       document.querySelectorAll("[data-charge]").forEach(b=>b.addEventListener("click",()=>{ selectedCard=b.getAttribute("data-charge"); page="checkout"; buildNav(); render(); }));
       document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",async()=>{ b.disabled=true; b.innerHTML='<span class="spin"></span>'; const snap=await api("customerSnapshot",{cardId:b.getAttribute("data-view")}); if(snap&&snap.email){ PREVIEW=snap; page="preview"; buildNav(); render(); } else { toast(snap&&snap.error?snap.error:"Could not load card."); b.disabled=false; b.textContent="View"; } }));
       var ib=$("issueBtn"); if(ib) ib.addEventListener("click",openIssue);
+      var gb=$("genBtn"); if(gb) gb.addEventListener("click",openGenerate);
       return;
     }
     if(page==="checkout"){
       s.innerHTML=
         '<div class="grid2"><div class="block"><h3>Charge a gift card</h3>'+
-          '<label class="flabel">Customer</label><select class="fld" id="coCard">'+(cards.length?cards.map(c=>'<option value="'+c.id+'"'+(c.id===selectedCard?" selected":"")+'>'+esc(c.email)+' — '+fmt(c.balance)+'</option>').join(""):'<option value="">No cards yet</option>')+'</select>'+
+          '<label class="flabel">Customer</label><select class="fld" id="coCard">'+(cards.length?cards.map(c=>'<option value="'+c.id+'"'+(c.id===selectedCard?" selected":"")+'>'+c.email+' — '+fmt(c.balance)+'</option>').join(""):'<option value="">No cards yet</option>')+'</select>'+
           '<label class="flabel">Sale amount</label><input class="fld" id="coAmt" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" />'+
-          '<button class="btn pri" id="coCharge" style="margin-top:10px">Charge gift card</button>'+
+          '<button class="btn pri" id="coCharge" style="margin-top:6px">Charge gift card</button>'+
           '<p class="note">Ring up the order in your own POS as usual, then enter the total here. The gift balance is deducted, the redemption is logged in the store POS, and the customer earns '+(prog().rewardsPercent||0)+'% back. Item details stay in your POS — only the total is charged.</p></div>'+
         '<div class="block"><h3>How it works</h3><div class="list">'+
           '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h3l2.4 12a1.6 1.6 0 0 0 1.6 1.3h8.2a1.6 1.6 0 0 0 1.6-1.3L22 7H6"/></svg></div><div><div class="nm">1 · Ring up the order in your POS</div><div class="dt">Any items, any total — nothing changes there.</div></div></div>'+
@@ -608,12 +360,13 @@
       $("coAmt").focus();
       return;
     }
+    // dashboard
     s.innerHTML=
-      '<div class="stats"><div class="stat green"><div class="k"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Funds held</div><div class="v">'+fmt(total)+'</div></div>'+
-      '<div class="stat green"><div class="k"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg>Points issued</div><div class="v">'+nf(ME.pointsIssued||0)+'</div></div>'+
-      '<div class="stat"><div class="k"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg>Active cards</div><div class="v">'+cards.filter(c=>c.balance>0).length+'</div></div></div>'+
-      '<div style="margin:16px 0 4px"><span class="badge" style="background:'+(ME.posConnected?"var(--mint)":"var(--dangerbg)")+';color:'+(ME.posConnected?"var(--accent2)":"var(--danger)")+';border:1px solid '+(ME.posConnected?"var(--mint2)":"#f6d4d0")+'">● Store POS '+(ME.posConnected?"connected":"not connected")+'</span></div>'+
-      '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent transactions</h3><button class="go" data-go="activity">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
+      '<div class="stats"><div class="stat green"><div class="k">Funds held</div><div class="v">'+fmt(total)+'</div></div>'+
+      '<div class="stat green"><div class="k">Points issued</div><div class="v">'+(ME.pointsIssued||0)+'</div></div>'+
+      '<div class="stat"><div class="k">Active cards</div><div class="v">'+cards.filter(c=>c.balance>0).length+'</div></div></div>'+
+      '<div style="margin:14px 0 4px"><span class="badge" style="background:'+(ME.posConnected?"var(--okbg)":"#fdecec")+';color:'+(ME.posConnected?"var(--accent2)":"#b91c1c")+'">● Store POS '+(ME.posConnected?"connected":"not connected")+'</span></div>'+
+      '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent transactions</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
   }
 
   /* ----- Merchant: Program & rewards settings ----- */
@@ -622,9 +375,9 @@
     const d=c=>((c||0)/100);
     s.innerHTML=
       '<div class="grid2"><div class="block"><h3>Branding</h3>'+
-        '<label class="flabel">Store name</label><input class="fld" id="pStore" value="'+esc(p.storeName||"")+'" />'+
-        '<label class="flabel">Card / program name</label><input class="fld" id="pProg" value="'+esc(p.programName||"")+'" />'+
-        '<h3 style="margin-top:16px">Rewards</h3>'+
+        '<label class="flabel">Store name</label><input class="fld" id="pStore" value="'+(p.storeName||"")+'" />'+
+        '<label class="flabel">Card / program name</label><input class="fld" id="pProg" value="'+(p.programName||"")+'" />'+
+        '<h3 style="margin-top:10px">Rewards</h3>'+
         '<label class="flabel">Rewards rate — % back as points</label><input class="fld" id="pRew" type="number" min="0" max="25" step="0.5" value="'+(p.rewardsPercent||0)+'" />'+
         '<label class="flabel">Minimum points to redeem</label><input class="fld" id="pMin" type="number" min="1" step="50" value="'+(p.redeemMinPoints||100)+'" />'+
         '<p class="note">Points are worth 1¢ each — 100 points = $1.00. A 5% rate gives a customer 5 points per $1 spent.</p>'+
@@ -632,9 +385,9 @@
         '<label class="flabel">Bonus on first load (%)</label><input class="fld" id="pFlb" type="number" min="0" max="50" step="1" value="'+(p.firstLoadBonusPercent||0)+'" />'+
         '<label class="flabel">Bonus cap ($)</label><input class="fld" id="pCap" type="number" min="0" step="1" value="'+d(p.firstLoadBonusCapCents)+'" />'+
         '<label class="flabel">Minimum first load to qualify ($)</label><input class="fld" id="pFmin" type="number" min="0" step="1" value="'+d(p.firstLoadMinCents)+'" />'+
-        '<h3 style="margin-top:16px">Signup bonus</h3>'+
+        '<h3 style="margin-top:10px">Signup bonus</h3>'+
         '<label class="flabel">Points granted once at signup</label><input class="fld" id="pSignup" type="number" min="0" step="50" value="'+(p.signupBonusPoints||0)+'" />'+
-        '<div class="block" id="pPrev" style="background:var(--mint);border:1px solid var(--mint2);margin-top:14px;font-size:13px;color:var(--accent2);font-weight:700"></div>'+
+        '<div class="block" id="pPrev" style="background:var(--okbg);border:none;margin-top:14px;font-size:13px;color:var(--accent2);font-weight:650"></div>'+
         '<button class="btn pri" id="pSave" style="margin-top:12px">Save settings</button></div></div>';
     const preview=()=>{ const rew=parseFloat($("pRew").value)||0, flb=parseFloat($("pFlb").value)||0, cap=parseFloat($("pCap").value)||0, min=parseFloat($("pFmin").value)||0; $("pPrev").innerHTML="Customers see: <b>"+rew+"% back</b>"+(flb>0?(" · <b>"+flb+"%</b> on a first load of $"+min+"+"+(cap>0?(" (up to $"+cap+")"):"")):""); };
     ["pRew","pFlb","pCap","pFmin"].forEach(id=>$(id).addEventListener("input",preview)); preview();
@@ -650,38 +403,47 @@
   function sheet(html){ const w=document.createElement("div"); w.className="sheet"; w.style.display="block"; w.innerHTML=html; document.body.appendChild(w); $("backdrop").style.display="block"; const close=()=>{w.remove();$("backdrop").style.display="none";}; $("backdrop").onclick=close; return {el:w,close}; }
   async function openAdd(){
     const st=await api("bankStatus");
-    if(!st||!st.linked){ openLinkBank(()=>openAdd()); return; }
-    const {el,close}=sheet('<h3>Add funds</h3><p class="sub">Transfer from your linked bank •••• '+esc(st.last4||"")+' by ACH.</p><div class="seg" id="q"><button data-q="25">$25</button><button data-q="50">$50</button><button data-q="100">$100</button><button data-q="200">$200</button></div><input class="fld" id="amt" type="number" min="1" step="1" placeholder="Or enter amount" /><button class="btn pri" id="go" style="margin-top:10px">Transfer to my card</button><button class="btn sub" id="relink" style="width:100%;margin-top:8px">Use a different bank</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button><p class="note">Funds are pulled from your bank by ACH and added to your store credit. Bank transfers normally take 1–3 business days to settle.</p>');
+    if(!st||!st.linked){ openLinkBank(); return; }
+    const {el,close}=sheet('<h3>Add funds</h3><p class="sub">Transfer from your linked bank •••• '+(st.last4||"")+' by ACH.</p><div class="seg" id="q"><button data-q="25">$25</button><button data-q="50">$50</button><button data-q="100">$100</button><button data-q="200">$200</button></div><input class="fld" id="amt" type="number" min="1" step="1" placeholder="Or enter amount" /><button class="btn pri" id="go">Transfer to my card</button><button class="btn sub" id="relink" style="width:100%;margin-top:8px">Use a different bank</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button><p class="note">Funds are pulled from your bank by ACH and added to your store credit. Bank transfers normally take 1–3 business days to settle.</p>');
     el.querySelectorAll("#q button").forEach(b=>b.addEventListener("click",()=>{el.querySelector("#amt").value=b.getAttribute("data-q");el.querySelectorAll("#q button").forEach(x=>x.classList.toggle("on",x===b));}));
     el.querySelector("#cx").addEventListener("click",close);
-    el.querySelector("#relink").addEventListener("click",()=>{ close(); openLinkBank(()=>openAdd()); });
-    el.querySelector("#go").addEventListener("click",async()=>{ const amt=Math.round(parseFloat(el.querySelector("#amt").value)*100); if(!amt||amt<=0){toast("Enter an amount.");return;} if(amt>200000){toast("Max $2,000 per transfer.");return;} const g=el.querySelector("#go"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("addFundsAch",{amount:amt}); if(r&&r.ok){ close(); let m=r.settled?("Added <b>"+fmt(amt)+"</b> to your card."):("Transfer of "+fmt(amt)+" started — arrives when it settles."); if(r.bonus>0) m+=" Welcome bonus +"+fmt(r.bonus)+"!"; toast(m); await refresh(); page="home"; buildNav(); render(); } else { toast(r&&r.error?r.error:"Could not start transfer."); g.disabled=false; g.textContent="Transfer to my card"; } });
+    el.querySelector("#relink").addEventListener("click",()=>{ close(); openLinkBank(); });
+    el.querySelector("#go").addEventListener("click",async()=>{ const amt=Math.round(parseFloat(el.querySelector("#amt").value)*100); if(!amt||amt<=0){toast("Enter an amount.");return;} if(amt>200000){toast("Max $2,000 per transfer.");return;} const g=el.querySelector("#go"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("addFundsAch",{amount:amt}); if(r&&r.ok){ close(); let m=r.settled?("Added "+fmt(amt)+" to your card."):("Transfer of "+fmt(amt)+" started — arrives when it settles."); if(r.bonus>0) m+=" Welcome bonus +"+fmt(r.bonus)+"!"; toast(m); await refresh(); } else { toast(r&&r.error?r.error:"Could not start transfer."); g.disabled=false; g.textContent="Transfer to my card"; } });
   }
-  function openLinkBank(after){
-    const {el,close}=sheet('<h3>Link your bank</h3><p class="sub">Add a bank account to load funds by ACH.</p><label class="flabel">Routing number</label><input class="fld" id="rt" inputmode="numeric" placeholder="9 digits" /><label class="flabel">Account number</label><input class="fld" id="an" inputmode="numeric" placeholder="Account number" /><label class="flabel">Account type</label><select class="fld" id="ft"><option value="checking">Checking</option><option value="savings">Savings</option></select><button class="btn pri" id="lk" style="margin-top:12px">Link bank</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button><p class="note">🔒 Your bank details are sent securely to our banking partner to enable ACH transfers, and are not stored in the app.</p>');
+  function openLinkBank(){
+    const {el,close}=sheet('<h3>Link your bank</h3><p class="sub">Add a bank account to load funds by ACH.</p><label class="flabel">Routing number</label><input class="fld" id="rt" inputmode="numeric" placeholder="9 digits" /><label class="flabel">Account number</label><input class="fld" id="an" inputmode="numeric" placeholder="Account number" /><label class="flabel">Account type</label><select class="fld" id="ft"><option value="checking">Checking</option><option value="savings">Savings</option></select><button class="btn pri" id="lk">Link bank</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button><p class="note">Your bank details are sent securely to our banking partner to enable ACH transfers, and are not stored in the app.</p>');
     el.querySelector("#cx").addEventListener("click",close);
-    el.querySelector("#lk").addEventListener("click",async()=>{ const routingNumber=(el.querySelector("#rt").value||"").trim(); const accountNumber=(el.querySelector("#an").value||"").trim(); const funding=el.querySelector("#ft").value; if(routingNumber.replace(/\D/g,"").length!==9){toast("Enter a valid 9-digit routing number.");return;} if(accountNumber.replace(/\D/g,"").length<4){toast("Enter a valid account number.");return;} const g=el.querySelector("#lk"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("linkBank",{routingNumber,accountNumber,funding}); if(r&&r.ok){ close(); toast("Bank linked •••• "+(r.last4||"")); if(typeof after==="function") after(); } else { toast(r&&r.error?r.error:"Could not link bank."); g.disabled=false; g.textContent="Link bank"; } });
+    el.querySelector("#lk").addEventListener("click",async()=>{ const routingNumber=(el.querySelector("#rt").value||"").trim(); const accountNumber=(el.querySelector("#an").value||"").trim(); const funding=el.querySelector("#ft").value; if(routingNumber.replace(/\D/g,"").length!==9){toast("Enter a valid 9-digit routing number.");return;} if(accountNumber.replace(/\D/g,"").length<4){toast("Enter a valid account number.");return;} const g=el.querySelector("#lk"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("linkBank",{routingNumber,accountNumber,funding}); if(r&&r.ok){ close(); toast("Bank linked •••• "+(r.last4||"")); openAdd(); } else { toast(r&&r.error?r.error:"Could not link bank."); g.disabled=false; g.textContent="Link bank"; } });
   }
   function openPay(){
-    const {el,close}=sheet('<h3>Pay in store</h3><p class="sub">Show this card number at the register to pay with your store credit.</p><div class="codebox" style="letter-spacing:2px;font-size:21px">'+fmtCard(ME.cardNumber)+'</div><p class="note" style="text-align:center;font-size:13px;margin-top:10px">Available balance <b style="color:var(--accent2)">'+fmt(ME.balance)+'</b></p><button class="btn sub" id="cx" style="width:100%;margin-top:10px">Done</button>');
+    const {el,close}=sheet('<h3>Pay in store</h3><p class="sub">Show this card number at the register.</p><div class="codebox" style="letter-spacing:2px;font-size:20px">'+fmtCard(ME.cardNumber)+'</div><p class="note" style="text-align:center">Balance '+fmt(ME.balance)+'</p><button class="btn sub" id="cx" style="width:100%;margin-top:10px">Done</button>');
     el.querySelector("#cx").addEventListener("click",close);
   }
   function openIvr(){
-    const {el,close}=sheet('<h3>Phone &amp; text banking</h3><p class="sub">Register your mobile number and a 4-digit PIN. You can then call or text to hear your balance and add money.</p><label class="flabel">Mobile number</label><input class="fld" id="ivp" inputmode="tel" placeholder="(555) 555-5555" value="'+esc(ME.phone||"")+'" /><label class="flabel">4-digit PIN</label><input class="fld" id="ivpin" inputmode="numeric" maxlength="4" placeholder="••••" /><button class="btn pri" id="ivgo" style="margin-top:10px">Save</button><button class="btn sub" id="ivcx" style="width:100%;margin-top:8px">Cancel</button><p class="note">Your PIN protects phone access. Choose 4 digits you can remember, and don’t reuse a bank card PIN.</p>');
+    const {el,close}=sheet('<h3>Phone &amp; text banking</h3><p class="sub">Register your mobile number and a 4-digit PIN. You can then call or text to hear your balance and add money.</p><label class="flabel">Mobile number</label><input class="fld" id="ivp" inputmode="tel" placeholder="(555) 555-5555" value="'+(ME.phone||"")+'" /><label class="flabel">4-digit PIN</label><input class="fld" id="ivpin" inputmode="numeric" maxlength="4" placeholder="••••" /><button class="btn pri" id="ivgo">Save</button><button class="btn sub" id="ivcx" style="width:100%;margin-top:8px">Cancel</button><p class="note">Your PIN protects phone access. Choose 4 digits you can remember, and don’t reuse a bank card PIN.</p>');
     el.querySelector("#ivcx").addEventListener("click",close);
     el.querySelector("#ivgo").addEventListener("click",async()=>{ const phone=(el.querySelector("#ivp").value||"").trim(); const pin=(el.querySelector("#ivpin").value||"").replace(/\D/g,""); if(pin.length!==4){toast("Enter a 4-digit PIN.");return;} const g=el.querySelector("#ivgo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("setIvr",{phone,pin}); if(r&&r.ok){ close(); toast("Phone banking is set up."); await refresh(); page="settings"; render(); } else { toast(r&&r.error?r.error:"Could not save."); g.disabled=false; g.textContent="Save"; } });
   }
   function openCharge(id,email){
-    const {el,close}=sheet('<h3>Charge card</h3><p class="sub">'+esc(email)+'</p><label class="flabel">Amount of sale</label><input class="fld" id="amt" type="number" min="0" step="0.01" placeholder="0.00" /><button class="btn pri" id="go" style="margin-top:10px">Charge</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button>');
+    const {el,close}=sheet('<h3>Charge card</h3><p class="sub">'+email+'</p><label class="flabel">Amount of sale</label><input class="fld" id="amt" type="number" min="0" step="0.01" placeholder="0.00" /><button class="btn pri" id="go">Charge</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button>');
     el.querySelector("#cx").addEventListener("click",close);
     el.querySelector("#go").addEventListener("click",async()=>{ const amt=Math.round(parseFloat(el.querySelector("#amt").value)*100); if(!amt||amt<=0){toast("Enter a sale amount.");return;} const g=el.querySelector("#go"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("charge",{cardId:id,amount:amt}); if(r&&r.ok){ close(); toast("Charged "+fmt(amt)+"."); await refresh(); } else { toast(r&&r.error?r.error:"Charge failed."); g.disabled=false; g.textContent="Charge"; } });
   }
 
   function openIssue(){
-    const {el,close}=sheet('<h3>Issue / load a card</h3><p class="sub">Create or top up a customer gift card.</p><label class="flabel">Customer email</label><input class="fld" id="iem" type="email" placeholder="customer@email.com" /><label class="flabel">Load amount</label><div class="seg" id="iq"><button data-q="25">$25</button><button data-q="50">$50</button><button data-q="100">$100</button><button data-q="200">$200</button></div><input class="fld" id="iamt" type="number" min="0" step="1" placeholder="Amount" /><button class="btn pri" id="igo" style="margin-top:10px">Issue card</button><button class="btn sub" id="icx" style="width:100%;margin-top:8px">Cancel</button>');
+    const {el,close}=sheet('<h3>Issue / load a card</h3><p class="sub">Create or top up a customer gift card.</p><label class="flabel">Customer email</label><input class="fld" id="iem" type="email" placeholder="customer@email.com" /><label class="flabel">Load amount</label><div class="seg" id="iq"><button data-q="25">$25</button><button data-q="50">$50</button><button data-q="100">$100</button><button data-q="200">$200</button></div><input class="fld" id="iamt" type="number" min="0" step="1" placeholder="Amount" /><button class="btn pri" id="igo">Issue card</button><button class="btn sub" id="icx" style="width:100%;margin-top:8px">Cancel</button>');
     el.querySelectorAll("#iq button").forEach(b=>b.addEventListener("click",()=>{el.querySelector("#iamt").value=b.getAttribute("data-q");el.querySelectorAll("#iq button").forEach(x=>x.classList.toggle("on",x===b));}));
     el.querySelector("#icx").addEventListener("click",close);
-    el.querySelector("#igo").addEventListener("click",async()=>{ const email=(el.querySelector("#iem").value||"").trim(); const amt=Math.round(parseFloat(el.querySelector("#iamt").value||"0")*100); if(!/.+@.+\..+/.test(email)){toast("Enter a valid email.");return;} const g=el.querySelector("#igo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("issueCard",{email,amount:amt}); if(r&&r.ok){ close(); toast("Card issued for "+esc(email)+" — balance "+fmt(r.balance)); await refresh(); } else { toast(r&&r.error?r.error:"Could not issue card."); g.disabled=false; g.textContent="Issue card"; } });
+    el.querySelector("#igo").addEventListener("click",async()=>{ const email=(el.querySelector("#iem").value||"").trim(); const amt=Math.round(parseFloat(el.querySelector("#iamt").value||"0")*100); if(!/.+@.+\..+/.test(email)){toast("Enter a valid email.");return;} const g=el.querySelector("#igo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("issueCard",{email,amount:amt}); if(r&&r.ok){ close(); toast("Card issued for "+email+" — balance "+fmt(r.balance)); await refresh(); } else { toast(r&&r.error?r.error:"Could not issue card."); g.disabled=false; g.textContent="Issue card"; } });
+  }
+
+  /* ---------- Admin: generate printable cards ---------- */
+  function downloadCsv(name, rows){ const csv=rows.map(r=>r.map(c=>'"'+String(c==null?"":c).replace(/"/g,'""')+'"').join(",")).join("\r\n"); const blob=new Blob([csv],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove(); }
+  function openGenerate(){
+    const {el,close}=sheet('<h3>Generate cards</h3><p class="sub">Create blank, unactivated cards to print. Customers activate them by phone — enter the card number, set a PIN, link a bank.</p><label class="flabel">How many</label><input class="fld" id="gcount" type="number" min="1" max="200" value="50" /><button class="btn pri" id="ggo">Generate &amp; download CSV</button><button class="btn sub" id="gex" style="width:100%;margin-top:8px">Export all existing cards</button><button class="btn sub" id="gcx" style="width:100%;margin-top:8px">Cancel</button><p class="note">You’ll get a CSV of 16-digit numbers to send to your printer. Keep it secure — whoever enters an unactivated card’s number first sets its PIN.</p>');
+    el.querySelector("#gcx").addEventListener("click",close);
+    el.querySelector("#ggo").addEventListener("click",async()=>{ const n=parseInt(el.querySelector("#gcount").value)||0; if(n<1){toast("Enter how many to generate.");return;} const g=el.querySelector("#ggo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("generateCards",{count:n}); if(r&&r.ok){ downloadCsv("shuk-cards-"+Date.now()+".csv",[["card_number"]].concat(r.cards.map(c=>[c]))); close(); toast("Generated "+r.count+" cards — CSV downloaded."); } else { toast(r&&r.error?r.error:"Could not generate."); g.disabled=false; g.textContent="Generate & download CSV"; } });
+    el.querySelector("#gex").addEventListener("click",async()=>{ const g=el.querySelector("#gex"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("listCards"); if(r&&r.ok){ downloadCsv("shuk-cards-all-"+Date.now()+".csv",[["card_number","status","phone","claimed_at"]].concat(r.cards.map(c=>[c.cardNumber,c.status,c.phone||"",c.claimedAt?new Date(c.claimedAt).toISOString():""]))); toast("Exported "+r.cards.length+" cards."); g.disabled=false; g.textContent="Export all existing cards"; } else { toast(r&&r.error?r.error:"Could not export."); g.disabled=false; g.textContent="Export all existing cards"; } });
   }
 
   /* ---------- Merchant charge (by total amount) ---------- */
