@@ -101,6 +101,82 @@ async function findBank(em) {
   } catch { return null; }
 }
 
+// List ALL of a customer's linked banks (active external accounts tagged for them).
+async function listBanks(em) {
+  try {
+    const d = await inc("/external_accounts?limit=100");
+    return (d.data || [])
+      .filter(x => (x.description || "") === "Bank:" + em && (x.status === undefined || x.status === "active"))
+      .map(x => ({
+        id: x.id,
+        last4: String(x.account_number || "").slice(-4),
+        routingLast4: String(x.routing_number || "").slice(-4),
+        funding: x.funding || "checking",
+        created: x.created_at || null,
+      }));
+  } catch { return []; }
+}
+
+// ---- Auto top-up (recurring / low-balance auto-reload) ----
+// Rule lives in the customer's Clerk private metadata under shuk.autoReload:
+//   { enabled, mode: "low"|"weekly"|"monthly", thresholdCents, amountCents, nextRun, lastRun }
+function autoCfg(user) {
+  const a = (user && user.privateMetadata && user.privateMetadata.shuk && user.privateMetadata.shuk.autoReload) || null;
+  if (!a) return null;
+  return {
+    enabled: !!a.enabled,
+    mode: ["low", "weekly", "monthly"].includes(a.mode) ? a.mode : "low",
+    thresholdCents: Math.max(0, Math.round(Number(a.thresholdCents) || 0)),
+    amountCents: Math.max(0, Math.round(Number(a.amountCents) || 0)),
+    nextRun: Number(a.nextRun) || 0,
+    lastRun: Number(a.lastRun) || 0,
+  };
+}
+function nextRunFrom(mode, from) {
+  const d = new Date(from || Date.now());
+  if (mode === "weekly") { d.setDate(d.getDate() + 7); return d.getTime(); }
+  if (mode === "monthly") { d.setMonth(d.getMonth() + 1); return d.getTime(); }
+  return 0;
+}
+// Pull funds from a linked bank into a card via ACH debit (sandbox auto-settles).
+async function achPull(cardId, bankId, amount, descriptor) {
+  let tr;
+  try { tr = await inc("/ach_transfers", "POST", { account_id: cardId, amount: -amount, statement_descriptor: descriptor || "Shuk Auto", external_account_id: bankId }); }
+  catch { return { ok: false }; }
+  if (tr && tr.status === "pending_approval" && tr.id) { try { await inc("/ach_transfers/" + tr.id + "/approve", "POST"); } catch {} }
+  let settled = false;
+  if (tr && tr.id && /sandbox/.test(IB)) {
+    try { await inc("/simulations/ach_transfers/" + tr.id + "/settle", "POST"); settled = true; }
+    catch { try { await inc("/simulations/ach_transfers/" + tr.id + "/acknowledge", "POST"); } catch {} }
+  }
+  return { ok: true, settled, status: (tr && tr.status) || "pending" };
+}
+// Evaluate a customer's auto-reload rule and fire it if due. Persists nextRun/lastRun.
+// `getBalance` lets the caller supply a known balance to avoid an extra fetch.
+async function runAutoReload(clerk, user, email, cardId, currentBalance) {
+  const cfg = autoCfg(user);
+  if (!cfg || !cfg.enabled || cfg.amountCents <= 0) return { ran: false };
+  const bank = await findBank(email);
+  if (!bank) return { ran: false, reason: "nobank" };
+  const now = Date.now();
+  if (cfg.lastRun && now - cfg.lastRun < 60000) return { ran: false }; // throttle
+  let due = false, advance = false;
+  if (cfg.mode === "low") { if (currentBalance < cfg.thresholdCents) due = true; }
+  else if (!cfg.nextRun || now >= cfg.nextRun) { due = true; advance = true; }
+  if (!due) return { ran: false };
+  const r = await achPull(cardId, bank.id, cfg.amountCents);
+  if (!r.ok) return { ran: false };
+  const patch = { lastRun: now };
+  if (advance) patch.nextRun = nextRunFrom(cfg.mode, now);
+  try {
+    const shuk = (user.privateMetadata && user.privateMetadata.shuk) || {};
+    const merged = { ...shuk, autoReload: { ...(shuk.autoReload || {}), ...patch } };
+    await clerk.users.updateUserMetadata(user.id, { privateMetadata: { shuk: merged } });
+    if (user.privateMetadata) user.privateMetadata.shuk = merged;
+  } catch {}
+  return { ran: true, amount: cfg.amountCents, settled: r.settled };
+}
+
 // ---- POS connector (records sales in the store's point-of-sale) ----
 const DK = process.env.DECIMAL_API_KEY;
 const DB = process.env.DECIMAL_BASE_URL || "https://api.poswithlogic.dev";
@@ -251,12 +327,37 @@ export default async function handler(req, res) {
       if (program.signupBonusPoints > 0 && !myFlags.signupBonus) {
         try { await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: program.signupBonusPoints }); await setMyFlag({ signupBonus: true }); } catch {}
       }
+      // Auto top-up: fire any due low-balance / scheduled reload before reporting balance.
+      let bal = await balance(card.id);
+      let autoReloaded = null;
+      try {
+        const auto = await runAutoReload(clerk, meUser, email, card.id, bal);
+        if (auto.ran) { bal = await balance(card.id); autoReloaded = { amount: auto.amount, settled: auto.settled }; }
+      } catch {}
       return res.status(200).json({
         role: "customer", email, name, cardId: card.id, code: codeFor(card), cardNumber: cardNumber(card),
-        balance: await balance(card.id), points: await balance(pts.id), transactions: await txns(card.id, 12),
+        balance: bal, points: await balance(pts.id), transactions: await txns(card.id, 12),
         program, firstLoadBonusUsed: !!myFlags.firstLoadBonus,
         phone: myFlags.phone || null, ivrPinSet: !!myFlags.pinHash,
+        autoReload: autoCfg(meUser) || { enabled: false, mode: "low", thresholdCents: 0, amountCents: 0 },
+        autoReloaded,
       });
+    }
+
+    if (action === "setAutoReload") {
+      const enabled = !!body.enabled;
+      const mode = ["low", "weekly", "monthly"].includes(body.mode) ? body.mode : "low";
+      const amountCents = Math.min(200000, Math.max(0, Math.round(Number(body.amountCents) || 0)));
+      const thresholdCents = Math.min(200000, Math.max(0, Math.round(Number(body.thresholdCents) || 0)));
+      if (enabled && amountCents <= 0) return res.status(200).json({ error: "Enter a reload amount." });
+      if (enabled && mode === "low" && thresholdCents <= 0) return res.status(200).json({ error: "Enter a low-balance threshold." });
+      if (enabled) { const bank = await findBank(email); if (!bank) return res.status(200).json({ error: "Link a bank account first." }); }
+      const prev = autoCfg(meUser) || {};
+      let nextRun = 0;
+      if (enabled && mode !== "low") nextRun = (prev.nextRun && prev.mode === mode) ? prev.nextRun : nextRunFrom(mode, Date.now());
+      const cfg = { enabled, mode, amountCents, thresholdCents, nextRun, lastRun: prev.lastRun || 0 };
+      await setMyFlag({ autoReload: cfg });
+      return res.status(200).json({ ok: true, autoReload: cfg });
     }
 
     if (action === "load") {
@@ -270,8 +371,19 @@ export default async function handler(req, res) {
     }
 
     if (action === "bankStatus") {
-      const b = await findBank(email);
-      return res.status(200).json({ linked: !!b, last4: b ? String(b.account_number || "").slice(-4) : null });
+      const banks = await listBanks(email);
+      const b = banks[0] || null;
+      return res.status(200).json({ linked: banks.length > 0, last4: b ? b.last4 : null, banks });
+    }
+
+    if (action === "removeBank") {
+      // Archive a customer's linked external account. Only allow removing one of THEIR banks.
+      const id = String(body.bankId || "");
+      const mine = await listBanks(email);
+      if (!id || !mine.some(b => b.id === id)) return res.status(200).json({ error: "Bank account not found." });
+      try { await inc("/external_accounts/" + id, "PATCH", { status: "archived" }); }
+      catch { return res.status(200).json({ error: "Could not remove bank." }); }
+      return res.status(200).json({ ok: true, banks: await listBanks(email) });
     }
 
     if (action === "linkBank") {
@@ -325,7 +437,7 @@ export default async function handler(req, res) {
         if (!holder) { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; }
         if (holder) {
           const idx = { ...((holder.privateMetadata && holder.privateMetadata.phoneIndex) || {}) };
-          for (const k of Object.keys(idx)) { if (idx[k] === emLower) delete idx[k]; } // drop stale mapping for this email
+          for (const k of Object.keys(idx)) { if (idx[k] === emLower) delete idx[k]; }
           idx[phone] = emLower;
           await clerk.users.updateUserMetadata(holder.id, { privateMetadata: { ...(holder.privateMetadata || {}), phoneIndex: idx } });
         }
@@ -468,8 +580,6 @@ export default async function handler(req, res) {
     }
 
     if (action === "generateCards") {
-      // Admin: pre-generate blank, unclaimed cards for printing. No Increase account
-      // is created until a customer activates the card by phone.
       if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
       if (!RURL || !RTOK) return res.status(200).json({ error: "Card store not configured. Connect Upstash and set UPSTASH_REDIS_REST_URL / _TOKEN in Vercel." });
       const count = Math.min(Math.max(parseInt(body.count, 10) || 0, 1), 200);
@@ -485,7 +595,6 @@ export default async function handler(req, res) {
     }
 
     if (action === "listCards") {
-      // Admin: list all generated cards + status (for re-export / reconciliation).
       if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
       if (!RURL || !RTOK) return res.status(200).json({ error: "Card store not configured." });
       const nums = (await redis(["SMEMBERS", "cards:all"])) || [];
