@@ -97,7 +97,10 @@ export default async function handler(req, res) {
         externalInvoiceId, invoiceDate: now, orderMethod: "Pickup",
         taxAmount, taxableAmount: isTaxable ? subtotal : 0, customerId,
         items: [{ productCode: code, quantity, unitPrice, subtotal, isTaxable, discountAmount: 0 }],
-        payments: [{ paymentMethod: "APICreditCard", amount: total, referenceNo: externalInvoiceId.slice(0, 15), dateTime: now }],
+        payments: [{
+          paymentMethod: "APICreditCard", amount: total, referenceNo: externalInvoiceId.slice(0, 15), dateTime: now,
+          cardholderName: "Shuk Gift", authorizationCode: externalInvoiceId.slice(0, 15), maskedCreditCardNumber: "************GIFT",
+        }],
         memo: "Shuk Gift redemption",
       };
       const r = await pos("/invoices", "POST", invoice);
