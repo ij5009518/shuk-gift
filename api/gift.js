@@ -3,15 +3,22 @@
 const IB = process.env.INCREASE_BASE_URL || "https://sandbox.increase.com";
 const IK = process.env.INCREASE_API_KEY;
 
-function merchantList() {
-  return (process.env.MERCHANT_EMAILS || "ij5009518@gmail.com")
-    .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+function emailList(v) { return String(v || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean); }
+// Platform admin(s) — the business owner. Sets rewards/branding, sees everything.
+// Falls back to MERCHANT_EMAILS for backward compatibility, then a default.
+function adminList() {
+  const a = emailList(process.env.ADMIN_EMAILS);
+  if (a.length) return a;
+  const m = emailList(process.env.MERCHANT_EMAILS);
+  return m.length ? m : ["ij5009518@gmail.com"];
 }
+// Store operator(s) — run a store: charge/issue cards, view transactions. No config.
+function storeList() { return emailList(process.env.STORE_EMAILS); }
 
 // ---- Program configuration (admin-editable, stored in Clerk metadata) ----
 // The canonical store admin's Clerk user holds the program config so every
 // request (customer or merchant) reads the same settings.
-const CONFIG_EMAIL = merchantList()[0];
+const CONFIG_EMAIL = adminList()[0];
 const PROGRAM_DEFAULTS = {
   storeName: "Shuk",                // brand shown to customers
   programName: "Shuk Gift",         // wallet / card name
@@ -137,7 +144,11 @@ export default async function handler(req, res) {
     return res.status(200).json({ error: "Sign-in not configured." });
   }
   if (!email) return res.status(200).json({ error: "No email on account." });
-  const isMerchant = merchantList().includes(email.toLowerCase());
+  const emLower = (email || "").toLowerCase();
+  const isAdmin = adminList().includes(emLower);
+  const isStore = !isAdmin && storeList().includes(emLower);
+  const isOperator = isAdmin || isStore;            // can run store operations
+  const role = isAdmin ? "admin" : isStore ? "store" : "customer";
 
   try {
     // ---- Program context: existing accounts give us entity + program + operating acct ----
@@ -190,7 +201,7 @@ export default async function handler(req, res) {
 
     // ---- Actions ----
     if (action === "bootstrap") {
-      if (isMerchant) {
+      if (isOperator) {
         const cardAccts = all.filter(a => String(a.name || "").startsWith("Gift:"));
         const cards = await Promise.all(cardAccts.map(async a => ({
           id: a.id, email: a.name.slice(5), code: codeFor(a), cardNumber: cardNumber(a), balance: await balance(a.id),
@@ -205,7 +216,7 @@ export default async function handler(req, res) {
         const transactions = lists.flat().sort((x, y) => new Date(y.at || 0) - new Date(x.at || 0)).slice(0, 60);
         const ptsAccts = all.filter(a => String(a.name || "").startsWith("Points:"));
         const pointsIssued = (await Promise.all(ptsAccts.map(a => balance(a.id)))).reduce((x, y) => x + y, 0);
-        return res.status(200).json({ role: "merchant", email, name, cards, transactions, posConnected: !!DK, pointsIssued, program });
+        return res.status(200).json({ role, isAdmin, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -273,7 +284,7 @@ export default async function handler(req, res) {
     }
 
     if (action === "charge") {
-      if (!isMerchant) return res.status(200).json({ error: "Only merchants can charge cards." });
+      if (!isOperator) return res.status(200).json({ error: "Only a store can charge cards." });
       const amount = Math.round(Number(body.amount) || 0);
       const cardId = body.cardId;
       if (!cardId) return res.status(200).json({ error: "Pick a card." });
@@ -290,7 +301,7 @@ export default async function handler(req, res) {
     }
 
     if (action === "issueCard") {
-      if (!isMerchant) return res.status(200).json({ error: "Merchants only." });
+      if (!isOperator) return res.status(200).json({ error: "Store access only." });
       const em = String(body.email || "").trim().toLowerCase();
       const amount = Math.round(Number(body.amount) || 0);
       if (!/.+@.+\..+/.test(em)) return res.status(200).json({ error: "Enter a valid customer email." });
@@ -302,7 +313,7 @@ export default async function handler(req, res) {
     }
 
     if (action === "posProduct") {
-      if (!isMerchant) return res.status(200).json({ error: "Merchants only." });
+      if (!isOperator) return res.status(200).json({ error: "Store access only." });
       if (!DK) return res.status(200).json({ error: "POS not connected." });
       const code = String(body.code || "").trim();
       if (!code) return res.status(200).json({ error: "Enter a product code." });
@@ -316,7 +327,7 @@ export default async function handler(req, res) {
     if (action === "checkout") {
       // Amount-based redemption. The store rings up the order in its own POS; here we
       // just charge the gift card for the order total (no item detail needed).
-      if (!isMerchant) return res.status(200).json({ error: "Only merchants can charge cards." });
+      if (!isOperator) return res.status(200).json({ error: "Only a store can charge cards." });
       const cardId = body.cardId;
       const amountCents = Math.round(Number(body.amount) || 0);
       if (!cardId) return res.status(200).json({ error: "Pick a customer." });
@@ -382,7 +393,7 @@ export default async function handler(req, res) {
 
     if (action === "setProgram") {
       // Admin-only: save the program configuration (rates, bonuses, branding).
-      if (!isMerchant) return res.status(200).json({ error: "Merchants only." });
+      if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
       if (!clerk) return res.status(200).json({ error: "Sign-in not configured." });
       let holder = cfgHolder;
       if (!holder) { try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {} }
@@ -397,8 +408,8 @@ export default async function handler(req, res) {
     }
 
     if (action === "customerSnapshot") {
-      // Merchant-only: returns the customer-facing view for one card (for the preview).
-      if (!isMerchant) return res.status(200).json({ error: "Merchants only." });
+      // Operator-only: returns the customer-facing view for one card (for the preview).
+      if (!isOperator) return res.status(200).json({ error: "Store access only." });
       const acct = all.find(a => a.id === body.cardId && String(a.name || "").startsWith("Gift:"));
       if (!acct) return res.status(200).json({ error: "Card not found." });
       const em = acct.name.slice(5);
