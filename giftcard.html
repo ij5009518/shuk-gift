@@ -141,6 +141,9 @@
   const $=id=>document.getElementById(id);
   const fmt=c=>"$"+((c||0)/100).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtCard=n=>n?String(n).replace(/(.{4})(?=.)/g,"$1 "):"•••• •••• •••• ••••";
+  const prog=()=>(ME&&ME.program)||{};
+  const brand=()=>prog().programName||"Shuk Gift";
+  const store=()=>prog().storeName||"Shuk";
   function toast(m){const t=$("toast");t.innerHTML=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",3600);}
   let clerkActive=false, ME=null, page="home", PREVIEW=null, selectedCard=null;
 
@@ -191,7 +194,7 @@
 
   function buildNav(){
     const items = ME.role==="merchant"
-      ? [["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Transactions",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']]
+      ? [["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Transactions",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],["program","Settings",'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>']]
       : [["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']];
     const mk=(id,label,svg,cls)=>'<button class="'+(page===id?cls:"")+'" data-go="'+id+'"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+svg+'</svg>'+label+'</button>';
     $("nav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
@@ -200,7 +203,7 @@
   document.body.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g){ page=g.getAttribute("data-go"); buildNav(); render(); } });
 
   /* ---------- Render ---------- */
-  const titles={home:ME=>ME.role==="merchant"?"Dashboard":"My card",checkout:()=>"Charge a card",customers:()=>"Gift cards",activity:ME=>ME.role==="merchant"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account"};
+  const titles={home:ME=>ME.role==="merchant"?"Dashboard":"My card",checkout:()=>"Charge a card",customers:()=>"Gift cards",activity:ME=>ME.role==="merchant"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
   function txLabel(t){
     const c=t.cat||"", pos=(t.amount||0)>0;
     if(c.indexOf("ach")>=0) return pos?"Bank transfer":"Bank withdrawal";
@@ -238,16 +241,22 @@
     }
     if(page==="rewards"){ renderRewards(s); return; }
     if(page==="settings"){ renderSettings(s); return; }
-    s.innerHTML=
-      '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn 1 point for every $1 you spend at Shuk.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(ME.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
+    const p=prog();
+    let banner="";
+    if(!ME.firstLoadBonusUsed && p.firstLoadBonusPercent>0){
+      const min=(p.firstLoadMinCents||0)/100, cap=(p.firstLoadBonusCapCents||0)/100;
+      banner='<div class="block" style="margin-bottom:18px;background:linear-gradient(120deg,#0e9f6e,#0b8a5f);color:#fff;border:none"><div style="display:flex;align-items:center;gap:13px"><div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.18);display:grid;place-items:center;flex:none"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18"/><path d="M12 8C12 5 10 3 8 4s0 4 4 4zM12 8c0-3 2-5 4-4s0 4-4 4z"/></svg></div><div><div style="font-weight:850;font-size:15px">Welcome bonus</div><div style="font-size:13px;opacity:.94">Load $'+min+'+ and get '+p.firstLoadBonusPercent+'% extra free on your first load'+(cap>0?(" (up to $"+cap+")"):"")+'.</div></div></div></div>';
+    }
+    s.innerHTML= banner+
+      '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn '+(p.rewardsPercent||0)+'% back every time you pay at '+store()+'.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(ME.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
       '<div class="grid2"><div>'+
-        '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">Shuk Gift</span><span class="tag">STORE CREDIT</span></div>'+
+        '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">'+brand()+'</span><span class="tag">STORE CREDIT</span></div>'+
         '<div class="lbl">Card balance</div><div class="bal">'+fmt(ME.balance)+'</div>'+
         '<div style="margin-top:18px;font-size:17px;letter-spacing:2.5px;font-variant-numeric:tabular-nums;font-weight:700">'+fmtCard(ME.cardNumber)+'</div>'+
-        '<div class="foot"><span>'+((ME.name||ME.email||"").toUpperCase())+'</span><span>SHUK GIFT</span></div></div>'+
+        '<div class="foot"><span>'+((ME.name||ME.email||"").toUpperCase())+'</span><span>'+brand().toUpperCase()+'</span></div></div>'+
         '<div class="actions"><button class="act" id="addFunds"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>Add funds</button>'+
         '<button class="act" id="payBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Pay in store</button></div>'+
-        '<p class="note">Store credit is spendable only at Shuk. It can’t be transferred to other people or cashed out.</p>'+
+        '<p class="note">Store credit is spendable only at '+store()+'. It can’t be transferred to other people or cashed out.</p>'+
       '</div><div class="block"><h3>Recent activity</h3><div class="list">'+(txns.length?txns.slice(0,6).map(actRow).join(""):'<div class="empty">No activity yet. Add funds to get started.</div>')+'</div></div></div>';
     $("addFunds").addEventListener("click",openAdd);
     $("payBtn").addEventListener("click",openPay);
@@ -255,21 +264,21 @@
 
   /* ----- Customer: Rewards / Redeem ----- */
   function renderRewards(s){
-    const pts=ME.points||0;
+    const pts=ME.points||0, p=prog(), minPts=p.redeemMinPoints||100;
     s.innerHTML=
       '<div class="grid2"><div>'+
         '<div class="gc" style="background:radial-gradient(130% 130% at 100% 0%,#2a6f4f 0%,#155a3f 45%,#0b3b2e 100%)"><div class="deco"></div><div class="r1"><span class="nm">Rewards</span><span class="tag">LOYALTY</span></div><div class="lbl">Points balance</div><div class="bal">'+pts+' <span style="font-size:18px;opacity:.8">pts</span></div><div class="foot"><span>WORTH '+fmt(pts)+'</span><span>100 PTS = $1.00</span></div></div>'+
-        '<p class="note">You earn 1 point for every $1 you spend at Shuk. Redeem points for store credit anytime — every 100 points becomes $1.00 on your card.</p>'+
+        '<p class="note">You earn '+(p.rewardsPercent||0)+'% back every time you pay at '+store()+'. Redeem points for store credit anytime — every 100 points becomes $1.00 on your card.</p>'+
       '</div><div class="block"><h3>Redeem points</h3>'+
-        '<label class="flabel">Points to redeem</label><div class="seg" id="rq"><button data-q="100">100</button><button data-q="500">500</button><button data-q="1000">1,000</button><button data-q="'+pts+'">All</button></div>'+
-        '<input class="fld" id="rpts" type="number" min="100" step="100" placeholder="e.g. 500" />'+
+        '<label class="flabel">Points to redeem</label><div class="seg" id="rq"><button data-q="'+minPts+'">'+minPts+'</button><button data-q="500">500</button><button data-q="1000">1,000</button><button data-q="'+pts+'">All</button></div>'+
+        '<input class="fld" id="rpts" type="number" min="'+minPts+'" step="100" placeholder="e.g. 500" />'+
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 12px"><span class="note" style="margin:0">Store credit you’ll receive</span><span id="rval" style="font-weight:850;font-size:16px">$0.00</span></div>'+
         '<button class="btn pri" id="rgo">Redeem for store credit</button>'+
-        '<p class="note">Minimum 100 points ($1.00) per redemption.</p></div></div>';
+        '<p class="note">Minimum '+minPts+' points ($'+(minPts/100).toFixed(2)+') per redemption.</p></div></div>';
     const calc=()=>{ const v=Math.floor(parseFloat($("rpts").value)||0); $("rval").textContent=fmt(v>0?v:0); };
     s.querySelectorAll("#rq button").forEach(b=>b.addEventListener("click",()=>{ $("rpts").value=b.getAttribute("data-q"); s.querySelectorAll("#rq button").forEach(x=>x.classList.toggle("on",x===b)); calc(); }));
     $("rpts").addEventListener("input",calc);
-    $("rgo").addEventListener("click",async()=>{ const p=Math.floor(parseFloat($("rpts").value)||0); if(p<100){ toast("Redeem at least 100 points."); return; } const g=$("rgo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("redeem",{points:p}); if(r&&r.ok){ toast("Redeemed "+p+" pts → "+fmt(r.credited)+" store credit."); await refresh(); page="home"; buildNav(); render(); } else { toast(r&&r.error?r.error:"Could not redeem."); g.disabled=false; g.textContent="Redeem for store credit"; } });
+    $("rgo").addEventListener("click",async()=>{ const v=Math.floor(parseFloat($("rpts").value)||0); if(v<minPts){ toast("Redeem at least "+minPts+" points."); return; } const g=$("rgo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("redeem",{points:v}); if(r&&r.ok){ toast("Redeemed "+v+" pts → "+fmt(r.credited)+" store credit."); await refresh(); page="home"; buildNav(); render(); } else { toast(r&&r.error?r.error:"Could not redeem."); g.disabled=false; g.textContent="Redeem for store credit"; } });
   }
 
   /* ----- Customer: Account settings ----- */
@@ -284,7 +293,7 @@
         '<button class="btn sub" id="soBtn" style="width:100%;margin-top:8px">Sign out</button>'+
       '</div><div class="block"><h3>Your card</h3>'+
         '<div class="codebox" style="letter-spacing:2px;font-size:18px">'+fmtCard(ME.cardNumber)+'</div>'+
-        '<p class="note">Show this card number at the register to pay with your Shuk store credit. Store credit isn’t transferable and can’t be cashed out. You earn 1 point per $1 spent — redeem points for credit on the Rewards page.</p></div></div>';
+        '<p class="note">Show this card number at the register to pay with your '+store()+' store credit. Store credit isn’t transferable and can’t be cashed out. You earn '+(prog().rewardsPercent||0)+'% back — redeem points for credit on the Rewards page.</p></div></div>';
     $("mgBtn").addEventListener("click",()=>{ try{ if(window.Clerk&&Clerk.openUserProfile){ Clerk.openUserProfile(); } else { toast("Profile management isn’t available."); } }catch(e){ toast("Profile management isn’t available."); } });
     $("soBtn").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
   }
@@ -293,16 +302,18 @@
   function renderMerchant(s){
     const cards=ME.cards||[], txns=ME.transactions||[];
     const total=cards.reduce((a,c)=>a+(c.balance||0),0);
+    if(page==="program"){ renderProgram(s); return; }
     if(page==="preview" && PREVIEW){
       const p=PREVIEW, pt=p.transactions||[];
       s.innerHTML=
         '<button class="btn sub" id="pvBack" style="width:auto;margin-bottom:14px">← Back to cards</button>'+
         '<p class="note" style="margin:0 0 14px">This is exactly what <b>'+p.email+'</b> sees when they sign in to their own app.</p>'+
-        '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn 1 point for every $1 spent at Shuk.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(p.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
+        '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn '+(prog().rewardsPercent||0)+'% back at '+store()+'.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(p.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
         '<div class="grid2"><div>'+
-          '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">Shuk Gift</span><span class="tag">STORE CREDIT</span></div>'+
+          '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">'+brand()+'</span><span class="tag">STORE CREDIT</span></div>'+
           '<div class="lbl">Card balance</div><div class="bal">'+fmt(p.balance)+'</div>'+
-          '<div class="foot"><span>'+((p.email||"").toUpperCase())+'</span><span>CODE '+(p.code||"····")+'</span></div></div>'+
+          '<div style="margin-top:18px;font-size:16px;letter-spacing:2px;font-variant-numeric:tabular-nums;font-weight:700">'+fmtCard(p.cardNumber)+'</div>'+
+          '<div class="foot"><span>'+((p.email||"").toUpperCase())+'</span><span>'+brand().toUpperCase()+'</span></div></div>'+
         '</div><div class="block"><h3>Recent activity</h3><div class="list">'+(pt.length?pt.slice(0,8).map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div></div>';
       $("pvBack").addEventListener("click",()=>{ PREVIEW=null; page="customers"; buildNav(); render(); });
       return;
@@ -324,7 +335,7 @@
           '<label class="flabel">Customer</label><select class="fld" id="coCard">'+(cards.length?cards.map(c=>'<option value="'+c.id+'"'+(c.id===selectedCard?" selected":"")+'>'+c.email+' — '+fmt(c.balance)+'</option>').join(""):'<option value="">No cards yet</option>')+'</select>'+
           '<label class="flabel">Sale amount</label><input class="fld" id="coAmt" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" />'+
           '<button class="btn pri" id="coCharge" style="margin-top:6px">Charge gift card</button>'+
-          '<p class="note">Ring up the order in your own POS as usual, then enter the total here. The gift balance is deducted, the redemption is logged in the store POS, and the customer earns 1 point per $1. Item details stay in your POS — only the total is charged.</p></div>'+
+          '<p class="note">Ring up the order in your own POS as usual, then enter the total here. The gift balance is deducted, the redemption is logged in the store POS, and the customer earns '+(prog().rewardsPercent||0)+'% back. Item details stay in your POS — only the total is charged.</p></div>'+
         '<div class="block"><h3>How it works</h3><div class="list">'+
           '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h3l2.4 12a1.6 1.6 0 0 0 1.6 1.3h8.2a1.6 1.6 0 0 0 1.6-1.3L22 7H6"/></svg></div><div><div class="nm">1 · Ring up the order in your POS</div><div class="dt">Any items, any total — nothing changes there.</div></div></div>'+
           '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><div><div class="nm">2 · Charge the gift card here</div><div class="dt">Pick the customer, enter the order total.</div></div></div>'+
@@ -344,6 +355,36 @@
       '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent transactions</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
   }
 
+  /* ----- Merchant: Program & rewards settings ----- */
+  function renderProgram(s){
+    const p=ME.program||{};
+    const d=c=>((c||0)/100);
+    s.innerHTML=
+      '<div class="grid2"><div class="block"><h3>Branding</h3>'+
+        '<label class="flabel">Store name</label><input class="fld" id="pStore" value="'+(p.storeName||"")+'" />'+
+        '<label class="flabel">Card / program name</label><input class="fld" id="pProg" value="'+(p.programName||"")+'" />'+
+        '<h3 style="margin-top:10px">Rewards</h3>'+
+        '<label class="flabel">Rewards rate — % back as points</label><input class="fld" id="pRew" type="number" min="0" max="25" step="0.5" value="'+(p.rewardsPercent||0)+'" />'+
+        '<label class="flabel">Minimum points to redeem</label><input class="fld" id="pMin" type="number" min="1" step="50" value="'+(p.redeemMinPoints||100)+'" />'+
+        '<p class="note">Points are worth 1¢ each — 100 points = $1.00. A 5% rate gives a customer 5 points per $1 spent.</p>'+
+      '</div><div class="block"><h3>First-load bonus</h3>'+
+        '<label class="flabel">Bonus on first load (%)</label><input class="fld" id="pFlb" type="number" min="0" max="50" step="1" value="'+(p.firstLoadBonusPercent||0)+'" />'+
+        '<label class="flabel">Bonus cap ($)</label><input class="fld" id="pCap" type="number" min="0" step="1" value="'+d(p.firstLoadBonusCapCents)+'" />'+
+        '<label class="flabel">Minimum first load to qualify ($)</label><input class="fld" id="pFmin" type="number" min="0" step="1" value="'+d(p.firstLoadMinCents)+'" />'+
+        '<h3 style="margin-top:10px">Signup bonus</h3>'+
+        '<label class="flabel">Points granted once at signup</label><input class="fld" id="pSignup" type="number" min="0" step="50" value="'+(p.signupBonusPoints||0)+'" />'+
+        '<div class="block" id="pPrev" style="background:var(--okbg);border:none;margin-top:14px;font-size:13px;color:var(--accent2);font-weight:650"></div>'+
+        '<button class="btn pri" id="pSave" style="margin-top:12px">Save settings</button></div></div>';
+    const preview=()=>{ const rew=parseFloat($("pRew").value)||0, flb=parseFloat($("pFlb").value)||0, cap=parseFloat($("pCap").value)||0, min=parseFloat($("pFmin").value)||0; $("pPrev").innerHTML="Customers see: <b>"+rew+"% back</b>"+(flb>0?(" · <b>"+flb+"%</b> on a first load of $"+min+"+"+(cap>0?(" (up to $"+cap+")"):"")):""); };
+    ["pRew","pFlb","pCap","pFmin"].forEach(id=>$(id).addEventListener("input",preview)); preview();
+    $("pSave").addEventListener("click",async()=>{
+      const program={ storeName:$("pStore").value, programName:$("pProg").value, rewardsPercent:parseFloat($("pRew").value)||0, redeemMinPoints:parseInt($("pMin").value)||100, firstLoadBonusPercent:parseFloat($("pFlb").value)||0, firstLoadBonusCapCents:Math.round((parseFloat($("pCap").value)||0)*100), firstLoadMinCents:Math.round((parseFloat($("pFmin").value)||0)*100), signupBonusPoints:parseInt($("pSignup").value)||0 };
+      const g=$("pSave"); g.disabled=true; g.innerHTML='<span class="spin"></span>';
+      const r=await api("setProgram",{program});
+      if(r&&r.ok){ ME.program=r.program; toast("Settings saved."); render(); } else { toast(r&&r.error?r.error:"Could not save."); g.disabled=false; g.textContent="Save settings"; }
+    });
+  }
+
   /* ---------- Sheets ---------- */
   function sheet(html){ const w=document.createElement("div"); w.className="sheet"; w.style.display="block"; w.innerHTML=html; document.body.appendChild(w); $("backdrop").style.display="block"; const close=()=>{w.remove();$("backdrop").style.display="none";}; $("backdrop").onclick=close; return {el:w,close}; }
   async function openAdd(){
@@ -353,7 +394,7 @@
     el.querySelectorAll("#q button").forEach(b=>b.addEventListener("click",()=>{el.querySelector("#amt").value=b.getAttribute("data-q");el.querySelectorAll("#q button").forEach(x=>x.classList.toggle("on",x===b));}));
     el.querySelector("#cx").addEventListener("click",close);
     el.querySelector("#relink").addEventListener("click",()=>{ close(); openLinkBank(); });
-    el.querySelector("#go").addEventListener("click",async()=>{ const amt=Math.round(parseFloat(el.querySelector("#amt").value)*100); if(!amt||amt<=0){toast("Enter an amount.");return;} if(amt>200000){toast("Max $2,000 per transfer.");return;} const g=el.querySelector("#go"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("addFundsAch",{amount:amt}); if(r&&r.ok){ close(); toast(r.settled?("Added "+fmt(amt)+" to your card."):("Transfer of "+fmt(amt)+" started — arrives when it settles.")); await refresh(); } else { toast(r&&r.error?r.error:"Could not start transfer."); g.disabled=false; g.textContent="Transfer to my card"; } });
+    el.querySelector("#go").addEventListener("click",async()=>{ const amt=Math.round(parseFloat(el.querySelector("#amt").value)*100); if(!amt||amt<=0){toast("Enter an amount.");return;} if(amt>200000){toast("Max $2,000 per transfer.");return;} const g=el.querySelector("#go"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("addFundsAch",{amount:amt}); if(r&&r.ok){ close(); let m=r.settled?("Added "+fmt(amt)+" to your card."):("Transfer of "+fmt(amt)+" started — arrives when it settles."); if(r.bonus>0) m+=" Welcome bonus +"+fmt(r.bonus)+"!"; toast(m); await refresh(); } else { toast(r&&r.error?r.error:"Could not start transfer."); g.disabled=false; g.textContent="Transfer to my card"; } });
   }
   function openLinkBank(){
     const {el,close}=sheet('<h3>Link your bank</h3><p class="sub">Add a bank account to load funds by ACH.</p><label class="flabel">Routing number</label><input class="fld" id="rt" inputmode="numeric" placeholder="9 digits" /><label class="flabel">Account number</label><input class="fld" id="an" inputmode="numeric" placeholder="Account number" /><label class="flabel">Account type</label><select class="fld" id="ft"><option value="checking">Checking</option><option value="savings">Savings</option></select><button class="btn pri" id="lk">Link bank</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button><p class="note">Your bank details are sent securely to our banking partner to enable ACH transfers, and are not stored in the app.</p>');
