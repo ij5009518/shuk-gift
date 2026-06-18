@@ -85,7 +85,7 @@ export default async function handler(req, res) {
   try {
     // ---- Program context: existing accounts give us entity + program + operating acct ----
     const all = (await inc("/accounts?limit=100")).data || [];
-    const operating = all.find(a => !String(a.name || "").startsWith("Gift:")) || all[0];
+    const operating = all.find(a => { const n = String(a.name || ""); return !n.startsWith("Gift:") && !n.startsWith("Points:"); }) || all[0];
     if (!operating) return res.status(200).json({ error: "No operating account found." });
     const { entity_id, program_id, id: opId } = operating;
 
