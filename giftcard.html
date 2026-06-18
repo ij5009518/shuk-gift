@@ -188,14 +188,21 @@
     const name=ME.name||(u&&u.fullName)||(ME.email||"").split("@")[0];
     $("sideName").textContent=name; $("sideEmail").textContent=ME.email||"";
     if(u&&u.imageUrl) $("avatar").innerHTML='<img src="'+u.imageUrl+'">'; else $("avatar").textContent=(name||"·").slice(0,1).toUpperCase();
-    $("rolePill").textContent = ME.role==="merchant" ? "MERCHANT" : "CUSTOMER";
+    $("rolePill").textContent = ME.role==="admin" ? "PLATFORM ADMIN" : ME.role==="store" ? "STORE" : "CUSTOMER";
+    if(page==="program" && ME.role!=="admin") page="home";
     buildNav(); render();
   }
 
   function buildNav(){
-    const items = ME.role==="merchant"
-      ? [["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Transactions",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],["program","Settings",'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>']]
-      : [["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']];
+    const gear='<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>';
+    let items;
+    if(ME.role==="customer"){
+      items=[["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']];
+    } else {
+      // store + admin share the operations nav; admin also gets Settings.
+      items=[["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Transactions",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']];
+      if(ME.role==="admin") items.push(["program","Settings",gear]);
+    }
     const mk=(id,label,svg,cls)=>'<button class="'+(page===id?cls:"")+'" data-go="'+id+'"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+svg+'</svg>'+label+'</button>';
     $("nav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
     $("mobnav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
@@ -203,7 +210,7 @@
   document.body.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g){ page=g.getAttribute("data-go"); buildNav(); render(); } });
 
   /* ---------- Render ---------- */
-  const titles={home:ME=>ME.role==="merchant"?"Dashboard":"My card",checkout:()=>"Charge a card",customers:()=>"Gift cards",activity:ME=>ME.role==="merchant"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
+  const titles={home:ME=>ME.role==="admin"?"Platform overview":ME.role==="store"?"Store dashboard":"My card",checkout:()=>"Charge a card",customers:()=>"Gift cards",activity:ME=>ME.role!=="customer"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
   function txLabel(t){
     const c=t.cat||"", pos=(t.amount||0)>0;
     if(c.indexOf("ach")>=0) return pos?"Bank transfer":"Bank withdrawal";
@@ -228,7 +235,7 @@
   function render(){
     $("pageTitle").textContent=(titles[page]||(()=>"Shuk Gift"))(ME);
     const s=$("scroll");
-    if(ME.role==="merchant") return renderMerchant(s);
+    if(ME.role!=="customer") return renderMerchant(s);
     return renderCustomer(s);
   }
 
@@ -302,7 +309,7 @@
   function renderMerchant(s){
     const cards=ME.cards||[], txns=ME.transactions||[];
     const total=cards.reduce((a,c)=>a+(c.balance||0),0);
-    if(page==="program"){ renderProgram(s); return; }
+    if(page==="program" && ME.role==="admin"){ renderProgram(s); return; }
     if(page==="preview" && PREVIEW){
       const p=PREVIEW, pt=p.transactions||[];
       s.innerHTML=
