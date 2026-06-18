@@ -141,7 +141,7 @@
   const $=id=>document.getElementById(id);
   const fmt=c=>"$"+((c||0)/100).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
   function toast(m){const t=$("toast");t.innerHTML=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",3600);}
-  let clerkActive=false, ME=null, page="home";
+  let clerkActive=false, ME=null, page="home", cart=[];
 
   async function api(action, body){
     const headers={"Content-Type":"application/json"};
@@ -190,7 +190,7 @@
 
   function buildNav(){
     const items = ME.role==="merchant"
-      ? [["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']]
+      ? [["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Checkout",'<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h3l2.4 12a1.6 1.6 0 0 0 1.6 1.3h8.2a1.6 1.6 0 0 0 1.6-1.3L22 7H6"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']]
       : [["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']];
     const mk=(id,label,svg,cls)=>'<button class="'+(page===id?cls:"")+'" data-go="'+id+'"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+svg+'</svg>'+label+'</button>';
     $("nav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
@@ -199,7 +199,7 @@
   document.body.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g){ page=g.getAttribute("data-go"); buildNav(); render(); } });
 
   /* ---------- Render ---------- */
-  const titles={home:ME=>ME.role==="merchant"?"Dashboard":"My card",customers:()=>"Gift cards",activity:()=>"Activity"};
+  const titles={home:ME=>ME.role==="merchant"?"Dashboard":"My card",checkout:()=>"Checkout",customers:()=>"Gift cards",activity:()=>"Activity"};
   function actRow(t){
     const pos=(t.amount||0)>0;
     const stroke=pos?"#0e9f6e":"#5d6b65";
@@ -222,6 +222,7 @@
       return;
     }
     s.innerHTML=
+      '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn 1 point for every $1 you spend at Shuk.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(ME.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
       '<div class="grid2"><div>'+
         '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">Shuk Gift</span><span class="tag">STORE CREDIT</span></div>'+
         '<div class="lbl">Card balance</div><div class="bal">'+fmt(ME.balance)+'</div>'+
@@ -243,21 +244,33 @@
       return;
     }
     if(page==="customers"){
-      s.innerHTML='<div class="block"><h3>Gift cards ('+cards.length+')</h3><div class="list">'+(cards.length?cards.map(c=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><div><div class="nm">'+c.email+'</div><div class="dt">Code '+c.code+'</div></div><span class="amt pos" style="margin-left:auto">'+fmt(c.balance)+'</span><button class="go" data-charge="'+c.id+'" data-email="'+c.email+'" style="margin-left:14px">Charge</button></div>').join(""):'<div class="empty">No gift cards yet. Customers appear here after they sign in.</div>')+'</div></div>';
-      document.querySelectorAll("[data-charge]").forEach(b=>b.addEventListener("click",()=>openCharge(b.getAttribute("data-charge"),b.getAttribute("data-email"))));
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Gift cards ('+cards.length+')</h3><button class="btn pri" id="issueBtn" style="width:auto;padding:8px 13px;font-size:13px">+ Issue / load card</button></div><div class="list">'+(cards.length?cards.map(c=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><div><div class="nm">'+c.email+'</div><div class="dt">Code '+c.code+'</div></div><span class="amt pos" style="margin-left:auto">'+fmt(c.balance)+'</span><button class="go" data-charge="'+c.id+'" data-email="'+c.email+'" style="margin-left:14px">Charge</button></div>').join(""):'<div class="empty">No gift cards yet. Customers appear here after they sign in.</div>')+'</div></div>';
+      document.querySelectorAll("[data-charge]").forEach(b=>b.addEventListener("click",()=>{ page="checkout"; buildNav(); render(); }));
+      var ib=$("issueBtn"); if(ib) ib.addEventListener("click",openIssue);
+      return;
+    }
+    if(page==="checkout"){
+      s.innerHTML=
+        '<div class="grid2"><div class="block"><h3>New sale</h3>'+
+          '<label class="flabel">Customer card</label><select class="fld" id="coCard">'+(cards.length?cards.map(c=>'<option value="'+c.id+'">'+c.email+' — '+fmt(c.balance)+'</option>').join(""):'<option value="">No cards yet</option>')+'</select>'+
+          '<label class="flabel">Add item by product code</label><div style="display:flex;gap:8px"><input class="fld" id="coCode" placeholder="e.g. 027891000155" style="margin:5px 0 0" /><button class="btn sub" id="coAdd" style="white-space:nowrap">Add</button></div>'+
+          '<p class="note">Scan or type a code from the store catalog. On charge, the gift balance is deducted, the sale is recorded in the store POS, and points are awarded.</p></div>'+
+        '<div class="block"><h3>Cart</h3><div class="list" id="coCart"></div>'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 2px 4px;border-top:1px solid var(--line);margin-top:6px"><span style="font-weight:800">Total</span><span id="coTotal" style="font-size:20px;font-weight:850">$0.00</span></div>'+
+          '<button class="btn pri block" id="coCharge" style="margin-top:10px">Charge gift card</button></div></div>';
+      renderCart();
+      $("coAdd").addEventListener("click",addItem);
+      $("coCharge").addEventListener("click",doCheckout);
+      $("coCode").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addItem(); } });
       return;
     }
     // dashboard
     s.innerHTML=
       '<div class="stats"><div class="stat green"><div class="k">Funds held</div><div class="v">'+fmt(total)+'</div></div>'+
-      '<div class="stat"><div class="k">Active cards</div><div class="v">'+cards.filter(c=>c.balance>0).length+'</div></div>'+
-      '<div class="stat"><div class="k">Total cards</div><div class="v">'+cards.length+'</div></div></div>'+
-      '<div class="grid2" style="margin-top:22px"><div class="block"><h3>Charge a card</h3>'+
-        '<label class="flabel">Card</label><select class="fld" id="chCard">'+(cards.length?cards.map(c=>'<option value="'+c.id+'">'+c.email+' — '+fmt(c.balance)+'</option>').join(""):'<option value="">No cards yet</option>')+'</select>'+
-        '<label class="flabel">Amount of sale</label><input class="fld" id="chAmt" type="number" min="0" step="0.01" placeholder="0.00" />'+
-        '<button class="btn pri" id="chargeBtn">Charge card</button><p class="note">Charging deducts store credit at the register. Funds stay in your account.</p></div>'+
-      '<div class="block"><h3>Recent activity</h3><div class="list">'+(txns.length?txns.slice(0,7).map(t=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+((t.amount>0)?"#0e9f6e":"#5d6b65")+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+((t.amount>0)?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>')+'</svg></div><div><div class="nm">'+(t.who||(t.amount>0?"Load":"Purchase"))+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(t.amount>0?"pos":"neg")+'">'+(t.amount>0?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>').join(""):'<div class="empty">No activity yet.</div>')+'</div></div></div>';
-    const cb=$("chargeBtn"); if(cb) cb.addEventListener("click",async()=>{ const id=$("chCard").value; const amt=Math.round(parseFloat($("chAmt").value)*100); if(!id){toast("No cards to charge.");return;} if(!amt||amt<=0){toast("Enter a sale amount.");return;} cb.disabled=true; cb.innerHTML='<span class="spin"></span>'; const r=await api("charge",{cardId:id,amount:amt}); if(r&&r.ok){ toast("Charged "+fmt(amt)+"."); await refresh(); } else { toast(r&&r.error?r.error:"Charge failed."); } cb.disabled=false; cb.textContent="Charge card"; });
+      '<div class="stat green"><div class="k">Points issued</div><div class="v">'+(ME.pointsIssued||0)+'</div></div>'+
+      '<div class="stat"><div class="k">Active cards</div><div class="v">'+cards.filter(c=>c.balance>0).length+'</div></div></div>'+
+      '<div style="margin:14px 0 4px"><span class="badge" style="background:'+(ME.posConnected?"var(--okbg)":"#fdecec")+';color:'+(ME.posConnected?"var(--accent2)":"#b91c1c")+'">● Store POS '+(ME.posConnected?"connected":"not connected")+'</span></div>'+
+      '<div class="block" style="margin-top:14px"><h3>Recent activity</h3><div class="list">'+(txns.length?txns.slice(0,8).map(t=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+((t.amount>0)?"#0e9f6e":"#5d6b65")+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+((t.amount>0)?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>')+'</svg></div><div><div class="nm">'+(t.who||(t.amount>0?"Load":"Purchase"))+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(t.amount>0?"pos":"neg")+'">'+(t.amount>0?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>').join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
   }
 
   /* ---------- Sheets ---------- */
@@ -276,6 +289,43 @@
     const {el,close}=sheet('<h3>Charge card</h3><p class="sub">'+email+'</p><label class="flabel">Amount of sale</label><input class="fld" id="amt" type="number" min="0" step="0.01" placeholder="0.00" /><button class="btn pri" id="go">Charge</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button>');
     el.querySelector("#cx").addEventListener("click",close);
     el.querySelector("#go").addEventListener("click",async()=>{ const amt=Math.round(parseFloat(el.querySelector("#amt").value)*100); if(!amt||amt<=0){toast("Enter a sale amount.");return;} const g=el.querySelector("#go"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("charge",{cardId:id,amount:amt}); if(r&&r.ok){ close(); toast("Charged "+fmt(amt)+"."); await refresh(); } else { toast(r&&r.error?r.error:"Charge failed."); g.disabled=false; g.textContent="Charge"; } });
+  }
+
+  function openIssue(){
+    const {el,close}=sheet('<h3>Issue / load a card</h3><p class="sub">Create or top up a customer gift card.</p><label class="flabel">Customer email</label><input class="fld" id="iem" type="email" placeholder="customer@email.com" /><label class="flabel">Load amount</label><div class="seg" id="iq"><button data-q="25">$25</button><button data-q="50">$50</button><button data-q="100">$100</button><button data-q="200">$200</button></div><input class="fld" id="iamt" type="number" min="0" step="1" placeholder="Amount" /><button class="btn pri" id="igo">Issue card</button><button class="btn sub" id="icx" style="width:100%;margin-top:8px">Cancel</button>');
+    el.querySelectorAll("#iq button").forEach(b=>b.addEventListener("click",()=>{el.querySelector("#iamt").value=b.getAttribute("data-q");el.querySelectorAll("#iq button").forEach(x=>x.classList.toggle("on",x===b));}));
+    el.querySelector("#icx").addEventListener("click",close);
+    el.querySelector("#igo").addEventListener("click",async()=>{ const email=(el.querySelector("#iem").value||"").trim(); const amt=Math.round(parseFloat(el.querySelector("#iamt").value||"0")*100); if(!/.+@.+\..+/.test(email)){toast("Enter a valid email.");return;} const g=el.querySelector("#igo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("issueCard",{email,amount:amt}); if(r&&r.ok){ close(); toast("Card issued for "+email+" — balance "+fmt(r.balance)); await refresh(); } else { toast(r&&r.error?r.error:"Could not issue card."); g.disabled=false; g.textContent="Issue card"; } });
+  }
+
+  /* ---------- Merchant checkout cart ---------- */
+  function cartTotal(){ return cart.reduce((a,it)=>{ const line=it.price*it.quantity; return a+line+(it.taxable?line*(it.taxRate||0):0); },0); }
+  function renderCart(){
+    const el=$("coCart"); if(!el) return;
+    if(!cart.length){ el.innerHTML='<div class="empty">No items yet — add by product code.</div>'; }
+    else el.innerHTML=cart.map((it,i)=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.4 12a1.6 1.6 0 0 0 1.6 1.3h8.2a1.6 1.6 0 0 0 1.6-1.3L21 7H6"/></svg></div><div><div class="nm">'+it.name+'</div><div class="dt">'+it.code+' · '+it.quantity+' × '+fmt(Math.round(it.price*100))+(it.taxable?" · taxable":"")+'</div></div><span class="amt neg" style="margin-left:auto">'+fmt(Math.round(it.price*it.quantity*100))+'</span><button class="go" data-rm="'+i+'" style="margin-left:12px;background:#fdecec;color:#b91c1c">✕</button></div>').join("");
+    el.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{ cart.splice(+b.getAttribute("data-rm"),1); renderCart(); }));
+    const tEl=$("coTotal"); if(tEl) tEl.textContent=fmt(Math.round(cartTotal()*100));
+  }
+  async function addItem(){
+    const codeEl=$("coCode"); const code=(codeEl.value||"").trim(); if(!code){ toast("Enter a product code."); return; }
+    const add=$("coAdd"); add.disabled=true; add.innerHTML='<span class="spin"></span>';
+    const r=await api("posProduct",{code});
+    add.disabled=false; add.textContent="Add";
+    if(r&&r.product){ const p=r.product; const ex=cart.find(c=>c.code===p.code); if(ex) ex.quantity++; else cart.push({code:p.code,name:p.name,price:p.price,quantity:1,taxable:p.taxable,taxRate:p.taxRate}); codeEl.value=""; codeEl.focus(); renderCart(); }
+    else toast(r&&r.error?r.error:"Product not found.");
+  }
+  async function doCheckout(){
+    const sel=$("coCard"); const cardId=sel&&sel.value; if(!cardId){ toast("No card selected."); return; }
+    if(!cart.length){ toast("Add at least one item."); return; }
+    const btn=$("coCharge"); btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+    const r=await api("checkout",{cardId,items:cart.map(it=>({code:it.code,price:it.price,quantity:it.quantity,taxable:it.taxable,taxRate:it.taxRate}))});
+    if(r&&r.ok){
+      cart=[];
+      let msg="Charged "+fmt(Math.round(r.total*100))+" · "+(r.pointsAwarded||0)+" pts";
+      msg += r.posInvoice ? " · POS sale "+r.posInvoice : (r.posError ? " · POS: "+r.posError : "");
+      toast(msg); await refresh(); page="home"; buildNav(); render();
+    } else { toast(r&&r.error?r.error:"Charge failed."); btn.disabled=false; btn.textContent="Charge gift card"; }
   }
 
   boot();
