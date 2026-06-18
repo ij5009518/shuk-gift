@@ -122,6 +122,27 @@ function ivrPinHash(email, pin) { return crypto.createHmac("sha256", process.env
 // Normalize a US phone number to E.164 (+1XXXXXXXXXX).
 function e164(p) { let d = String(p || "").replace(/[^\d]/g, ""); if (d.length === 10) d = "1" + d; if (d.length === 11 && d[0] === "1") return "+" + d; return ""; }
 
+// ---- Card store (Upstash Redis REST) — pre-printed, phone-activated cards ----
+const RURL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const RTOK = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+async function redis(cmd) {
+  if (!RURL || !RTOK) throw new Error("Card store not configured.");
+  const r = await fetch(RURL, { method: "POST", headers: { Authorization: "Bearer " + RTOK, "Content-Type": "application/json" }, body: JSON.stringify(cmd) });
+  const d = await r.json();
+  if (d && d.error) throw new Error(d.error);
+  return d ? d.result : null;
+}
+const rGet = async (k) => { const v = await redis(["GET", k]); return v ? JSON.parse(v) : null; };
+const rSet = (k, v) => redis(["SET", k, JSON.stringify(v)]);
+// Random 16-digit Luhn-valid card number (leading 9, matching the derived ones).
+function randCardNumber() {
+  let base = "9";
+  for (let i = 0; i < 14; i++) base += Math.floor(Math.random() * 10);
+  let sum = 0, dbl = true;
+  for (let i = base.length - 1; i >= 0; i--) { let d = +base[i]; if (dbl) { d *= 2; if (d > 9) d -= 9; } sum += d; dbl = !dbl; }
+  return base + ((10 - (sum % 10)) % 10);
+}
+
 export default async function handler(req, res) {
   if (!IK) return res.status(200).json({ error: "Service not configured." });
   const secret = process.env.CLERK_SECRET_KEY;
@@ -444,6 +465,37 @@ export default async function handler(req, res) {
       const em = acct.name.slice(5);
       const pts = await ensurePoints(em);
       return res.status(200).json({ email: em, code: codeFor(acct), cardNumber: cardNumber(acct), balance: await balance(acct.id), points: await balance(pts.id), transactions: await txns(acct.id, 12) });
+    }
+
+    if (action === "generateCards") {
+      // Admin: pre-generate blank, unclaimed cards for printing. No Increase account
+      // is created until a customer activates the card by phone.
+      if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
+      if (!RURL || !RTOK) return res.status(200).json({ error: "Card store not configured. Connect Upstash and set UPSTASH_REDIS_REST_URL / _TOKEN in Vercel." });
+      const count = Math.min(Math.max(parseInt(body.count, 10) || 0, 1), 200);
+      const made = [];
+      for (let i = 0; i < count; i++) {
+        let num = "";
+        for (let t = 0; t < 6; t++) { num = randCardNumber(); if (!(await rGet("card:" + num))) break; }
+        await rSet("card:" + num, { status: "unclaimed", createdAt: Date.now() });
+        await redis(["SADD", "cards:all", num]);
+        made.push(num);
+      }
+      return res.status(200).json({ ok: true, count: made.length, cards: made });
+    }
+
+    if (action === "listCards") {
+      // Admin: list all generated cards + status (for re-export / reconciliation).
+      if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
+      if (!RURL || !RTOK) return res.status(200).json({ error: "Card store not configured." });
+      const nums = (await redis(["SMEMBERS", "cards:all"])) || [];
+      const cards = [];
+      for (const n of nums) {
+        const rec = (await rGet("card:" + n)) || {};
+        cards.push({ cardNumber: n, status: rec.status || "unknown", phone: rec.phone || null, claimedAt: rec.claimedAt || null });
+      }
+      cards.sort((a, b) => (a.claimedAt || 0) - (b.claimedAt || 0));
+      return res.status(200).json({ ok: true, cards });
     }
 
     return res.status(200).json({ error: "Unknown action." });
