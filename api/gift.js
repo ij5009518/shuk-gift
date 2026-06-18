@@ -1,5 +1,6 @@
 // Shuk Gift backend. Auth via Clerk session; balances/ledger held as real bank
 // accounts (one per customer) with the banking provider. No provider names exposed.
+import crypto from "crypto";
 const IB = process.env.INCREASE_BASE_URL || "https://sandbox.increase.com";
 const IK = process.env.INCREASE_API_KEY;
 
@@ -44,18 +45,6 @@ function cleanProgram(p) {
     redeemMinPoints: Math.max(1, Math.round(num(o.redeemMinPoints, PROGRAM_DEFAULTS.redeemMinPoints, 100000))),
   };
 }
-// Per-store config (admin-managed). Each store can set its own rewards rate.
-function cleanStore(s, email) {
-  const o = s || {};
-  const num = (v, d, max) => { let n = Number(v); if (!isFinite(n) || n < 0) n = d; if (max != null && n > max) n = max; return n; };
-  const nm = String(o.name == null ? "" : o.name).trim().slice(0, 60) || String(email || "").split("@")[0];
-  return {
-    name: nm,
-    rewardsPercent: num(o.rewardsPercent, PROGRAM_DEFAULTS.rewardsPercent, 25),
-    active: o.active === false ? false : true,
-    note: String(o.note == null ? "" : o.note).trim().slice(0, 120),
-  };
-}
 async function loadProgram(clerk, knownUser) {
   let holder = null;
   if (knownUser && (knownUser.emailAddresses || []).some(e => (e.emailAddress || "").toLowerCase() === CONFIG_EMAIL)) holder = knownUser;
@@ -63,10 +52,7 @@ async function loadProgram(clerk, knownUser) {
     try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {}
   }
   const saved = (holder && holder.privateMetadata && holder.privateMetadata.program) || {};
-  const savedStores = (holder && holder.privateMetadata && holder.privateMetadata.stores) || {};
-  const stores = {};
-  for (const k of Object.keys(savedStores)) { const em = k.toLowerCase(); stores[em] = cleanStore(savedStores[k], em); }
-  return { holder, program: cleanProgram({ ...PROGRAM_DEFAULTS, ...saved }), stores };
+  return { holder, program: cleanProgram({ ...PROGRAM_DEFAULTS, ...saved }) };
 }
 
 async function inc(path, method = "GET", body) {
@@ -131,6 +117,11 @@ async function pos(path, method = "GET", body) {
 const posList = (d) => Array.isArray(d) ? d : (d.results || d.data || d.items || d.records || []);
 async function posCustomerId() { try { const c = posList(await pos("/customers?take=1"))[0]; return c && (c.id ?? c.customerId); } catch { return null; } }
 
+// IVR/SMS PIN hash. MUST stay identical to api/ivr.js pinHash().
+function ivrPinHash(email, pin) { return crypto.createHmac("sha256", process.env.CLERK_SECRET_KEY || "shuk-ivr").update("pin:" + String(email).toLowerCase() + ":" + String(pin)).digest("hex"); }
+// Normalize a US phone number to E.164 (+1XXXXXXXXXX).
+function e164(p) { let d = String(p || "").replace(/[^\d]/g, ""); if (d.length === 10) d = "1" + d; if (d.length === 11 && d[0] === "1") return "+" + d; return ""; }
+
 export default async function handler(req, res) {
   if (!IK) return res.status(200).json({ error: "Service not configured." });
   const secret = process.env.CLERK_SECRET_KEY;
@@ -161,7 +152,9 @@ export default async function handler(req, res) {
   if (!email) return res.status(200).json({ error: "No email on account." });
   const emLower = (email || "").toLowerCase();
   const isAdmin = adminList().includes(emLower);
-  // isStore / role are finalized below, after the admin's store registry loads.
+  const isStore = !isAdmin && storeList().includes(emLower);
+  const isOperator = isAdmin || isStore;            // can run store operations
+  const role = isAdmin ? "admin" : isStore ? "store" : "customer";
 
   try {
     // ---- Program context: existing accounts give us entity + program + operating acct ----
@@ -189,14 +182,8 @@ export default async function handler(req, res) {
       return c;
     }
 
-    // ---- Program config + store registry + per-customer reward flags ----
-    const { holder: cfgHolder, program, stores } = await loadProgram(clerk, meUser);
-    // Finalize role: a store is anyone in the admin's store registry (or legacy STORE_EMAILS env).
-    const isStore = !isAdmin && (!!stores[emLower] || storeList().includes(emLower));
-    const isOperator = isAdmin || isStore;
-    const role = isAdmin ? "admin" : isStore ? "store" : "customer";
-    // A store's checkout awards that store's own rate; otherwise the global default.
-    const effRewards = (opEmail) => { const s = stores[(opEmail || "").toLowerCase()]; return (s && s.rewardsPercent != null) ? s.rewardsPercent : program.rewardsPercent; };
+    // ---- Program config + per-customer reward flags ----
+    const { holder: cfgHolder, program } = await loadProgram(clerk, meUser);
     const myFlags = (meUser && meUser.privateMetadata && meUser.privateMetadata.shuk) || {};
     async function setMyFlag(patch) {
       try {
@@ -222,14 +209,9 @@ export default async function handler(req, res) {
     if (action === "bootstrap") {
       if (isOperator) {
         const cardAccts = all.filter(a => String(a.name || "").startsWith("Gift:"));
-        const ptsAccts = all.filter(a => String(a.name || "").startsWith("Points:"));
-        const ptsBalForEmail = async (em) => { const p = all.find(x => x.name === "Points:" + em); return p ? await balance(p.id) : 0; };
-        const cards = await Promise.all(cardAccts.map(async a => {
-          const em = a.name.slice(5);
-          const obj = { id: a.id, email: em, code: codeFor(a), cardNumber: cardNumber(a), balance: await balance(a.id) };
-          if (isAdmin) obj.points = await ptsBalForEmail(em);
-          return obj;
-        }));
+        const cards = await Promise.all(cardAccts.map(async a => ({
+          id: a.id, email: a.name.slice(5), code: codeFor(a), cardNumber: cardNumber(a), balance: await balance(a.id),
+        })));
         cards.sort((x, y) => y.balance - x.balance);
         // Per-customer transaction report, built from each gift card's ledger history.
         // On a card: a negative entry is a redemption (sale), a positive entry is a load.
@@ -238,15 +220,9 @@ export default async function handler(req, res) {
           return list.map(t => ({ email: a.name.slice(5), code: codeFor(a), amount: t.amount, when: t.when, at: t.at, who: t.amount < 0 ? "Sale" : "Load" }));
         }));
         const transactions = lists.flat().sort((x, y) => new Date(y.at || 0) - new Date(x.at || 0)).slice(0, 60);
+        const ptsAccts = all.filter(a => String(a.name || "").startsWith("Points:"));
         const pointsIssued = (await Promise.all(ptsAccts.map(a => balance(a.id)))).reduce((x, y) => x + y, 0);
-        if (isAdmin) {
-          const fundsHeld = cards.reduce((s, c) => s + (c.balance || 0), 0);
-          const storesArr = Object.keys(stores).map(k => ({ email: k, ...stores[k] })).sort((a, b) => a.name.localeCompare(b.name));
-          const stats = { fundsHeld, pointsIssued, activeCards: cards.filter(c => c.balance > 0).length, customerCount: cards.length, storeCount: storesArr.length };
-          return res.status(200).json({ role, isAdmin: true, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program, stores: storesArr, stats });
-        }
-        // Store sees its own effective rate.
-        return res.status(200).json({ role, isAdmin: false, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program: { ...program, rewardsPercent: effRewards(emLower) } });
+        return res.status(200).json({ role, isAdmin, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -258,6 +234,7 @@ export default async function handler(req, res) {
         role: "customer", email, name, cardId: card.id, code: codeFor(card), cardNumber: cardNumber(card),
         balance: await balance(card.id), points: await balance(pts.id), transactions: await txns(card.id, 12),
         program, firstLoadBonusUsed: !!myFlags.firstLoadBonus,
+        phone: myFlags.phone || null, ivrPinSet: !!myFlags.pinHash,
       });
     }
 
@@ -311,6 +288,28 @@ export default async function handler(req, res) {
       }
       const bonus = settled ? await applyFirstLoadBonus(card, amount) : 0;
       return res.status(200).json({ ok: true, status: (tr && tr.status) || "pending", settled, bonus, balance: await balance(card.id) });
+    }
+
+    if (action === "setIvr") {
+      // Customer registers a phone number + 4-digit PIN for phone/SMS banking.
+      // PIN is stored hashed in the customer's private metadata; the phone -> email
+      // mapping is kept in a phoneIndex on the admin user so the IVR can resolve callers.
+      const pin = String(body.pin || "").replace(/\D/g, "");
+      const phone = e164(body.phone);
+      if (!phone) return res.status(200).json({ error: "Enter a valid US phone number." });
+      if (pin.length !== 4) return res.status(200).json({ error: "PIN must be 4 digits." });
+      await setMyFlag({ phone, pinHash: ivrPinHash(emLower, pin) });
+      try {
+        let holder = cfgHolder;
+        if (!holder) { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; }
+        if (holder) {
+          const idx = { ...((holder.privateMetadata && holder.privateMetadata.phoneIndex) || {}) };
+          for (const k of Object.keys(idx)) { if (idx[k] === emLower) delete idx[k]; } // drop stale mapping for this email
+          idx[phone] = emLower;
+          await clerk.users.updateUserMetadata(holder.id, { privateMetadata: { ...(holder.privateMetadata || {}), phoneIndex: idx } });
+        }
+      } catch {}
+      return res.status(200).json({ ok: true, phone, ivrPinSet: true });
     }
 
     if (action === "charge") {
@@ -394,7 +393,7 @@ export default async function handler(req, res) {
         const cardAcct = all.find(a => a.id === cardId);
         const em = cardAcct && String(cardAcct.name || "").startsWith("Gift:") ? cardAcct.name.slice(5) : null;
         if (em) {
-          pointsAwarded = Math.floor(total * effRewards(emLower));
+          pointsAwarded = Math.floor(total * program.rewardsPercent);
           if (pointsAwarded > 0) {
             const pts = await ensurePoints(em);
             await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: pointsAwarded });
@@ -435,29 +434,6 @@ export default async function handler(req, res) {
         return res.status(200).json({ error: "Could not save settings: " + String((e && e.message) || e).slice(0, 120) });
       }
       return res.status(200).json({ ok: true, program: merged });
-    }
-
-    if (action === "setStore" || action === "removeStore") {
-      // Admin-only: manage the store registry (per-store rewards). Adding a store
-      // email here also grants it the store role (no redeploy needed).
-      if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
-      if (!clerk) return res.status(200).json({ error: "Sign-in not configured." });
-      let holder = cfgHolder;
-      if (!holder) { try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {} }
-      if (!holder) return res.status(200).json({ error: "Could not locate the platform admin account." });
-      const reg = { ...((holder.privateMetadata && holder.privateMetadata.stores) || {}) };
-      const sem = String(body.email || "").trim().toLowerCase();
-      if (!/.+@.+\..+/.test(sem)) return res.status(200).json({ error: "Enter a valid store email." });
-      if (adminList().includes(sem)) return res.status(200).json({ error: "That email is the platform admin." });
-      if (action === "removeStore") { delete reg[sem]; }
-      else { reg[sem] = cleanStore({ ...(reg[sem] || {}), ...(body.store || {}) }, sem); }
-      try {
-        await clerk.users.updateUserMetadata(holder.id, { privateMetadata: { ...(holder.privateMetadata || {}), stores: reg } });
-      } catch (e) {
-        return res.status(200).json({ error: "Could not save store: " + String((e && e.message) || e).slice(0, 120) });
-      }
-      const out = Object.keys(reg).map(k => ({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
-      return res.status(200).json({ ok: true, stores: out });
     }
 
     if (action === "customerSnapshot") {
