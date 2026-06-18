@@ -140,8 +140,9 @@
 <script>
   const $=id=>document.getElementById(id);
   const fmt=c=>"$"+((c||0)/100).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtCard=n=>n?String(n).replace(/(.{4})(?=.)/g,"$1 "):"•••• •••• •••• ••••";
   function toast(m){const t=$("toast");t.innerHTML=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",3600);}
-  let clerkActive=false, ME=null, page="home", cart=[];
+  let clerkActive=false, ME=null, page="home", PREVIEW=null, selectedCard=null;
 
   async function api(action, body){
     const headers={"Content-Type":"application/json"};
@@ -190,8 +191,8 @@
 
   function buildNav(){
     const items = ME.role==="merchant"
-      ? [["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Checkout",'<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h3l2.4 12a1.6 1.6 0 0 0 1.6 1.3h8.2a1.6 1.6 0 0 0 1.6-1.3L22 7H6"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']]
-      : [["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']];
+      ? [["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["activity","Transactions",'<path d="M3 12h4l3 8 4-16 3 8h4"/>']]
+      : [["home","My card",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>'],["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],["activity","Activity",'<path d="M3 12h4l3 8 4-16 3 8h4"/>'],["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']];
     const mk=(id,label,svg,cls)=>'<button class="'+(page===id?cls:"")+'" data-go="'+id+'"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+svg+'</svg>'+label+'</button>';
     $("nav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
     $("mobnav").innerHTML=items.map(i=>mk(i[0],i[1],i[2],"on")).join("");
@@ -199,13 +200,20 @@
   document.body.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g){ page=g.getAttribute("data-go"); buildNav(); render(); } });
 
   /* ---------- Render ---------- */
-  const titles={home:ME=>ME.role==="merchant"?"Dashboard":"My card",checkout:()=>"Checkout",customers:()=>"Gift cards",activity:()=>"Activity"};
+  const titles={home:ME=>ME.role==="merchant"?"Dashboard":"My card",checkout:()=>"Charge a card",customers:()=>"Gift cards",activity:ME=>ME.role==="merchant"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account"};
   function actRow(t){
     const pos=(t.amount||0)>0;
     const stroke=pos?"#0e9f6e":"#5d6b65";
     const path=pos?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>';
     const label=pos?"Added funds":"Purchase";
     return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(pos?"pos":"neg")+'">'+(pos?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>';
+  }
+  function merchRow(t){
+    const sale=(t.amount||0)<0;
+    const stroke=sale?"#5d6b65":"#0e9f6e";
+    const path=sale?'<path d="M12 19V5M5 12l7-7 7 7"/>':'<path d="M12 5v14M5 12l7 7 7-7"/>';
+    const label=t.who||(sale?"Sale":"Load");
+    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+(t.email?' · '+t.email:'')+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(sale?"neg":"pos")+'">'+(sale?"−":"+")+fmt(Math.abs(t.amount))+'</div></div>';
   }
   function render(){
     $("pageTitle").textContent=(titles[page]||(()=>"Shuk Gift"))(ME);
@@ -221,12 +229,15 @@
       s.innerHTML='<div class="block"><h3>Activity</h3><div class="list">'+(txns.length?txns.map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
       return;
     }
+    if(page==="rewards"){ renderRewards(s); return; }
+    if(page==="settings"){ renderSettings(s); return; }
     s.innerHTML=
       '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn 1 point for every $1 you spend at Shuk.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(ME.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
       '<div class="grid2"><div>'+
         '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">Shuk Gift</span><span class="tag">STORE CREDIT</span></div>'+
         '<div class="lbl">Card balance</div><div class="bal">'+fmt(ME.balance)+'</div>'+
-        '<div class="foot"><span>'+((ME.name||ME.email||"").toUpperCase())+'</span><span>CODE '+(ME.code||"····")+'</span></div></div>'+
+        '<div style="margin-top:18px;font-size:17px;letter-spacing:2.5px;font-variant-numeric:tabular-nums;font-weight:700">'+fmtCard(ME.cardNumber)+'</div>'+
+        '<div class="foot"><span>'+((ME.name||ME.email||"").toUpperCase())+'</span><span>SHUK GIFT</span></div></div>'+
         '<div class="actions"><button class="act" id="addFunds"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>Add funds</button>'+
         '<button class="act" id="payBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>Pay in store</button></div>'+
         '<p class="note">Store credit is spendable only at Shuk. It can’t be transferred to other people or cashed out.</p>'+
@@ -235,33 +246,86 @@
     $("payBtn").addEventListener("click",openPay);
   }
 
+  /* ----- Customer: Rewards / Redeem ----- */
+  function renderRewards(s){
+    const pts=ME.points||0;
+    s.innerHTML=
+      '<div class="grid2"><div>'+
+        '<div class="gc" style="background:radial-gradient(130% 130% at 100% 0%,#2a6f4f 0%,#155a3f 45%,#0b3b2e 100%)"><div class="deco"></div><div class="r1"><span class="nm">Rewards</span><span class="tag">LOYALTY</span></div><div class="lbl">Points balance</div><div class="bal">'+pts+' <span style="font-size:18px;opacity:.8">pts</span></div><div class="foot"><span>WORTH '+fmt(pts)+'</span><span>100 PTS = $1.00</span></div></div>'+
+        '<p class="note">You earn 1 point for every $1 you spend at Shuk. Redeem points for store credit anytime — every 100 points becomes $1.00 on your card.</p>'+
+      '</div><div class="block"><h3>Redeem points</h3>'+
+        '<label class="flabel">Points to redeem</label><div class="seg" id="rq"><button data-q="100">100</button><button data-q="500">500</button><button data-q="1000">1,000</button><button data-q="'+pts+'">All</button></div>'+
+        '<input class="fld" id="rpts" type="number" min="100" step="100" placeholder="e.g. 500" />'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 12px"><span class="note" style="margin:0">Store credit you’ll receive</span><span id="rval" style="font-weight:850;font-size:16px">$0.00</span></div>'+
+        '<button class="btn pri" id="rgo">Redeem for store credit</button>'+
+        '<p class="note">Minimum 100 points ($1.00) per redemption.</p></div></div>';
+    const calc=()=>{ const v=Math.floor(parseFloat($("rpts").value)||0); $("rval").textContent=fmt(v>0?v:0); };
+    s.querySelectorAll("#rq button").forEach(b=>b.addEventListener("click",()=>{ $("rpts").value=b.getAttribute("data-q"); s.querySelectorAll("#rq button").forEach(x=>x.classList.toggle("on",x===b)); calc(); }));
+    $("rpts").addEventListener("input",calc);
+    $("rgo").addEventListener("click",async()=>{ const p=Math.floor(parseFloat($("rpts").value)||0); if(p<100){ toast("Redeem at least 100 points."); return; } const g=$("rgo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("redeem",{points:p}); if(r&&r.ok){ toast("Redeemed "+p+" pts → "+fmt(r.credited)+" store credit."); await refresh(); page="home"; buildNav(); render(); } else { toast(r&&r.error?r.error:"Could not redeem."); g.disabled=false; g.textContent="Redeem for store credit"; } });
+  }
+
+  /* ----- Customer: Account settings ----- */
+  function renderSettings(s){
+    const line=(k,v)=>'<div class="row"><div><div class="dt">'+k+'</div><div class="nm">'+v+'</div></div></div>';
+    s.innerHTML=
+      '<div class="grid2"><div class="block"><h3>Account</h3>'+
+        line("Name",ME.name||"—")+line("Email",ME.email||"—")+
+        '<div class="row"><div><div class="dt">Card number</div><div class="nm" style="font-variant-numeric:tabular-nums;letter-spacing:1px">'+fmtCard(ME.cardNumber)+'</div></div></div>'+
+        '<div class="row" style="border:none"><div><div class="dt">Current balance</div><div class="nm">'+fmt(ME.balance)+' · '+(ME.points||0)+' pts</div></div></div>'+
+        '<button class="btn sub" id="mgBtn" style="width:100%;margin-top:12px">Manage profile &amp; security</button>'+
+        '<button class="btn sub" id="soBtn" style="width:100%;margin-top:8px">Sign out</button>'+
+      '</div><div class="block"><h3>Your card</h3>'+
+        '<div class="codebox" style="letter-spacing:2px;font-size:18px">'+fmtCard(ME.cardNumber)+'</div>'+
+        '<p class="note">Show this card number at the register to pay with your Shuk store credit. Store credit isn’t transferable and can’t be cashed out. You earn 1 point per $1 spent — redeem points for credit on the Rewards page.</p></div></div>';
+    $("mgBtn").addEventListener("click",()=>{ try{ if(window.Clerk&&Clerk.openUserProfile){ Clerk.openUserProfile(); } else { toast("Profile management isn’t available."); } }catch(e){ toast("Profile management isn’t available."); } });
+    $("soBtn").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
+  }
+
   /* ----- Merchant ----- */
   function renderMerchant(s){
     const cards=ME.cards||[], txns=ME.transactions||[];
     const total=cards.reduce((a,c)=>a+(c.balance||0),0);
+    if(page==="preview" && PREVIEW){
+      const p=PREVIEW, pt=p.transactions||[];
+      s.innerHTML=
+        '<button class="btn sub" id="pvBack" style="width:auto;margin-bottom:14px">← Back to cards</button>'+
+        '<p class="note" style="margin:0 0 14px">This is exactly what <b>'+p.email+'</b> sees when they sign in to their own app.</p>'+
+        '<div class="block" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><h3 style="margin:0 0 2px">Loyalty points</h3><span class="note" style="margin:0">Earn 1 point for every $1 spent at Shuk.</span></div><div style="font-size:32px;font-weight:850;color:var(--accent);white-space:nowrap">'+(p.points||0)+' <span style="font-size:15px;color:var(--muted);font-weight:700">pts</span></div></div>'+
+        '<div class="grid2"><div>'+
+          '<div class="gc"><div class="deco"></div><div class="r1"><span class="nm">Shuk Gift</span><span class="tag">STORE CREDIT</span></div>'+
+          '<div class="lbl">Card balance</div><div class="bal">'+fmt(p.balance)+'</div>'+
+          '<div class="foot"><span>'+((p.email||"").toUpperCase())+'</span><span>CODE '+(p.code||"····")+'</span></div></div>'+
+        '</div><div class="block"><h3>Recent activity</h3><div class="list">'+(pt.length?pt.slice(0,8).map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div></div>';
+      $("pvBack").addEventListener("click",()=>{ PREVIEW=null; page="customers"; buildNav(); render(); });
+      return;
+    }
     if(page==="activity"){
-      s.innerHTML='<div class="block"><h3>All activity</h3><div class="list">'+(txns.length?txns.map(t=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+((t.amount>0)?"#0e9f6e":"#5d6b65")+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+((t.amount>0)?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>')+'</svg></div><div><div class="nm">'+(t.who||(t.amount>0?"Load":"Purchase"))+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(t.amount>0?"pos":"neg")+'">'+(t.amount>0?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>').join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">All transactions</h3><span class="note" style="margin:0">'+txns.length+' record'+(txns.length===1?"":"s")+'</span></div><div class="list">'+(txns.length?txns.map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
       return;
     }
     if(page==="customers"){
-      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Gift cards ('+cards.length+')</h3><button class="btn pri" id="issueBtn" style="width:auto;padding:8px 13px;font-size:13px">+ Issue / load card</button></div><div class="list">'+(cards.length?cards.map(c=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><div><div class="nm">'+c.email+'</div><div class="dt">Code '+c.code+'</div></div><span class="amt pos" style="margin-left:auto">'+fmt(c.balance)+'</span><button class="go" data-charge="'+c.id+'" data-email="'+c.email+'" style="margin-left:14px">Charge</button></div>').join(""):'<div class="empty">No gift cards yet. Customers appear here after they sign in.</div>')+'</div></div>';
-      document.querySelectorAll("[data-charge]").forEach(b=>b.addEventListener("click",()=>{ page="checkout"; buildNav(); render(); }));
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Gift cards ('+cards.length+')</h3><button class="btn pri" id="issueBtn" style="width:auto;padding:8px 13px;font-size:13px">+ Issue / load card</button></div><div class="list">'+(cards.length?cards.map(c=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><div><div class="nm">'+c.email+'</div><div class="dt">'+fmtCard(c.cardNumber)+'</div></div><span class="amt pos" style="margin-left:auto">'+fmt(c.balance)+'</span><button class="go" data-view="'+c.id+'" style="margin-left:14px;background:var(--surface);color:var(--ink)">View</button><button class="go" data-charge="'+c.id+'" style="margin-left:8px">Charge</button></div>').join(""):'<div class="empty">No gift cards yet. Issue one above, or customers appear here after they sign in.</div>')+'</div></div>';
+      document.querySelectorAll("[data-charge]").forEach(b=>b.addEventListener("click",()=>{ selectedCard=b.getAttribute("data-charge"); page="checkout"; buildNav(); render(); }));
+      document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",async()=>{ b.disabled=true; b.innerHTML='<span class="spin"></span>'; const snap=await api("customerSnapshot",{cardId:b.getAttribute("data-view")}); if(snap&&snap.email){ PREVIEW=snap; page="preview"; buildNav(); render(); } else { toast(snap&&snap.error?snap.error:"Could not load card."); b.disabled=false; b.textContent="View"; } }));
       var ib=$("issueBtn"); if(ib) ib.addEventListener("click",openIssue);
       return;
     }
     if(page==="checkout"){
       s.innerHTML=
-        '<div class="grid2"><div class="block"><h3>New sale</h3>'+
-          '<label class="flabel">Customer card</label><select class="fld" id="coCard">'+(cards.length?cards.map(c=>'<option value="'+c.id+'">'+c.email+' — '+fmt(c.balance)+'</option>').join(""):'<option value="">No cards yet</option>')+'</select>'+
-          '<label class="flabel">Add item by product code</label><div style="display:flex;gap:8px"><input class="fld" id="coCode" placeholder="e.g. 027891000155" style="margin:5px 0 0" /><button class="btn sub" id="coAdd" style="white-space:nowrap">Add</button></div>'+
-          '<p class="note">Scan or type a code from the store catalog. On charge, the gift balance is deducted, the sale is recorded in the store POS, and points are awarded.</p></div>'+
-        '<div class="block"><h3>Cart</h3><div class="list" id="coCart"></div>'+
-          '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 2px 4px;border-top:1px solid var(--line);margin-top:6px"><span style="font-weight:800">Total</span><span id="coTotal" style="font-size:20px;font-weight:850">$0.00</span></div>'+
-          '<button class="btn pri block" id="coCharge" style="margin-top:10px">Charge gift card</button></div></div>';
-      renderCart();
-      $("coAdd").addEventListener("click",addItem);
-      $("coCharge").addEventListener("click",doCheckout);
-      $("coCode").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addItem(); } });
+        '<div class="grid2"><div class="block"><h3>Charge a gift card</h3>'+
+          '<label class="flabel">Customer</label><select class="fld" id="coCard">'+(cards.length?cards.map(c=>'<option value="'+c.id+'"'+(c.id===selectedCard?" selected":"")+'>'+c.email+' — '+fmt(c.balance)+'</option>').join(""):'<option value="">No cards yet</option>')+'</select>'+
+          '<label class="flabel">Sale amount</label><input class="fld" id="coAmt" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" />'+
+          '<button class="btn pri" id="coCharge" style="margin-top:6px">Charge gift card</button>'+
+          '<p class="note">Ring up the order in your own POS as usual, then enter the total here. The gift balance is deducted, the redemption is logged in the store POS, and the customer earns 1 point per $1. Item details stay in your POS — only the total is charged.</p></div>'+
+        '<div class="block"><h3>How it works</h3><div class="list">'+
+          '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M2 3h3l2.4 12a1.6 1.6 0 0 0 1.6 1.3h8.2a1.6 1.6 0 0 0 1.6-1.3L22 7H6"/></svg></div><div><div class="nm">1 · Ring up the order in your POS</div><div class="dt">Any items, any total — nothing changes there.</div></div></div>'+
+          '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><div><div class="nm">2 · Charge the gift card here</div><div class="dt">Pick the customer, enter the order total.</div></div></div>'+
+          '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><div><div class="nm">3 · Done</div><div class="dt">Balance deducted, points earned, sale recorded.</div></div></div>'+
+        '</div></div></div>';
+      $("coCharge").addEventListener("click",doAmountCharge);
+      $("coAmt").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); doAmountCharge(); } });
+      $("coAmt").focus();
       return;
     }
     // dashboard
@@ -270,7 +334,7 @@
       '<div class="stat green"><div class="k">Points issued</div><div class="v">'+(ME.pointsIssued||0)+'</div></div>'+
       '<div class="stat"><div class="k">Active cards</div><div class="v">'+cards.filter(c=>c.balance>0).length+'</div></div></div>'+
       '<div style="margin:14px 0 4px"><span class="badge" style="background:'+(ME.posConnected?"var(--okbg)":"#fdecec")+';color:'+(ME.posConnected?"var(--accent2)":"#b91c1c")+'">● Store POS '+(ME.posConnected?"connected":"not connected")+'</span></div>'+
-      '<div class="block" style="margin-top:14px"><h3>Recent activity</h3><div class="list">'+(txns.length?txns.slice(0,8).map(t=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+((t.amount>0)?"#0e9f6e":"#5d6b65")+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+((t.amount>0)?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>')+'</svg></div><div><div class="nm">'+(t.who||(t.amount>0?"Load":"Purchase"))+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(t.amount>0?"pos":"neg")+'">'+(t.amount>0?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>').join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
+      '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent transactions</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
   }
 
   /* ---------- Sheets ---------- */
@@ -282,7 +346,7 @@
     el.querySelector("#go").addEventListener("click",async()=>{ const amt=Math.round(parseFloat(el.querySelector("#amt").value)*100); if(!amt||amt<=0){toast("Enter an amount.");return;} if(amt>200000){toast("Max $2,000 per load.");return;} const g=el.querySelector("#go"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("load",{amount:amt}); if(r&&r.ok){ close(); toast("Added "+fmt(amt)+" to your card."); await refresh(); } else { toast(r&&r.error?r.error:"Could not add funds."); g.disabled=false; g.textContent="Add funds"; } });
   }
   function openPay(){
-    const {el,close}=sheet('<h3>Pay in store</h3><p class="sub">Show this code at the register.</p><div class="codebox">'+(ME.code||"····")+'</div><button class="btn sub" id="cx" style="width:100%;margin-top:14px">Done</button>');
+    const {el,close}=sheet('<h3>Pay in store</h3><p class="sub">Show this card number at the register.</p><div class="codebox" style="letter-spacing:2px;font-size:20px">'+fmtCard(ME.cardNumber)+'</div><p class="note" style="text-align:center">Balance '+fmt(ME.balance)+'</p><button class="btn sub" id="cx" style="width:100%;margin-top:10px">Done</button>');
     el.querySelector("#cx").addEventListener("click",close);
   }
   function openCharge(id,email){
@@ -298,33 +362,17 @@
     el.querySelector("#igo").addEventListener("click",async()=>{ const email=(el.querySelector("#iem").value||"").trim(); const amt=Math.round(parseFloat(el.querySelector("#iamt").value||"0")*100); if(!/.+@.+\..+/.test(email)){toast("Enter a valid email.");return;} const g=el.querySelector("#igo"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("issueCard",{email,amount:amt}); if(r&&r.ok){ close(); toast("Card issued for "+email+" — balance "+fmt(r.balance)); await refresh(); } else { toast(r&&r.error?r.error:"Could not issue card."); g.disabled=false; g.textContent="Issue card"; } });
   }
 
-  /* ---------- Merchant checkout cart ---------- */
-  function cartTotal(){ return cart.reduce((a,it)=>{ const line=it.price*it.quantity; return a+line+(it.taxable?line*(it.taxRate||0):0); },0); }
-  function renderCart(){
-    const el=$("coCart"); if(!el) return;
-    if(!cart.length){ el.innerHTML='<div class="empty">No items yet — add by product code.</div>'; }
-    else el.innerHTML=cart.map((it,i)=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.4 12a1.6 1.6 0 0 0 1.6 1.3h8.2a1.6 1.6 0 0 0 1.6-1.3L21 7H6"/></svg></div><div><div class="nm">'+it.name+'</div><div class="dt">'+it.code+' · '+it.quantity+' × '+fmt(Math.round(it.price*100))+(it.taxable?" · taxable":"")+'</div></div><span class="amt neg" style="margin-left:auto">'+fmt(Math.round(it.price*it.quantity*100))+'</span><button class="go" data-rm="'+i+'" style="margin-left:12px;background:#fdecec;color:#b91c1c">✕</button></div>').join("");
-    el.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{ cart.splice(+b.getAttribute("data-rm"),1); renderCart(); }));
-    const tEl=$("coTotal"); if(tEl) tEl.textContent=fmt(Math.round(cartTotal()*100));
-  }
-  async function addItem(){
-    const codeEl=$("coCode"); const code=(codeEl.value||"").trim(); if(!code){ toast("Enter a product code."); return; }
-    const add=$("coAdd"); add.disabled=true; add.innerHTML='<span class="spin"></span>';
-    const r=await api("posProduct",{code});
-    add.disabled=false; add.textContent="Add";
-    if(r&&r.product){ const p=r.product; const ex=cart.find(c=>c.code===p.code); if(ex) ex.quantity++; else cart.push({code:p.code,name:p.name,price:p.price,quantity:1,taxable:p.taxable,taxRate:p.taxRate}); codeEl.value=""; codeEl.focus(); renderCart(); }
-    else toast(r&&r.error?r.error:"Product not found.");
-  }
-  async function doCheckout(){
-    const sel=$("coCard"); const cardId=sel&&sel.value; if(!cardId){ toast("No card selected."); return; }
-    if(!cart.length){ toast("Add at least one item."); return; }
+  /* ---------- Merchant charge (by total amount) ---------- */
+  async function doAmountCharge(){
+    const sel=$("coCard"); const cardId=sel&&sel.value; if(!cardId){ toast("No customer selected."); return; }
+    const amt=Math.round(parseFloat($("coAmt").value)*100); if(!amt||amt<=0){ toast("Enter a sale amount."); return; }
     const btn=$("coCharge"); btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
-    const r=await api("checkout",{cardId,items:cart.map(it=>({code:it.code,price:it.price,quantity:it.quantity,taxable:it.taxable,taxRate:it.taxRate}))});
+    const r=await api("checkout",{cardId,amount:amt});
     if(r&&r.ok){
-      cart=[];
-      let msg="Charged "+fmt(Math.round(r.total*100))+" · "+(r.pointsAwarded||0)+" pts";
-      msg += r.posInvoice ? " · POS sale "+r.posInvoice : (r.posError ? " · POS: "+r.posError : "");
-      toast(msg); await refresh(); page="home"; buildNav(); render();
+      selectedCard=null;
+      let msg="Charged "+fmt(Math.round(r.total*100))+" · "+(r.pointsAwarded||0)+" pts earned";
+      msg += r.posInvoice ? " · sale recorded in POS" : (r.posError ? " · POS not synced" : "");
+      toast(msg); await refresh(); page="activity"; buildNav(); render();
     } else { toast(r&&r.error?r.error:"Charge failed."); btn.disabled=false; btn.textContent="Charge gift card"; }
   }
 
