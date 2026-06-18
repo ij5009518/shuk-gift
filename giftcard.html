@@ -201,11 +201,18 @@
 
   /* ---------- Render ---------- */
   const titles={home:ME=>ME.role==="merchant"?"Dashboard":"My card",checkout:()=>"Charge a card",customers:()=>"Gift cards",activity:ME=>ME.role==="merchant"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account"};
+  function txLabel(t){
+    const c=t.cat||"", pos=(t.amount||0)>0;
+    if(c.indexOf("ach")>=0) return pos?"Bank transfer":"Bank withdrawal";
+    if(c==="account_transfer_intention") return pos?"Credit":"Purchase";
+    if(c==="interest_payment") return /redeem/i.test(t.desc||"")?"Points redeemed":"Added funds";
+    return pos?"Added funds":"Purchase";
+  }
   function actRow(t){
     const pos=(t.amount||0)>0;
     const stroke=pos?"#0e9f6e":"#5d6b65";
     const path=pos?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>';
-    const label=pos?"Added funds":"Purchase";
+    const label=txLabel(t);
     return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(pos?"pos":"neg")+'">'+(pos?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>';
   }
   function merchRow(t){
