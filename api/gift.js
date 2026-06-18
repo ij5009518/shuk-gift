@@ -42,7 +42,7 @@ async function balance(id) { try { const b = await inc("/accounts/" + id + "/bal
 async function txns(id, limit) {
   try {
     const d = await inc("/transactions?account_id=" + id + "&limit=" + (limit || 12));
-    return (d.data || []).map(t => ({ amount: cents(t.amount), when: when(t.created_at), at: t.created_at }));
+    return (d.data || []).map(t => ({ amount: cents(t.amount), when: when(t.created_at), at: t.created_at, cat: (t.source && t.source.category) || "", desc: t.description || "" }));
   } catch { return []; }
 }
 
