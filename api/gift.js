@@ -27,12 +27,22 @@ async function inc(path, method = "GET", body) {
 const cents = (a) => (typeof a === "number" ? a : 0);
 const when = (iso) => { try { return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" }); } catch { return ""; } };
 const codeFor = (acct) => String(acct.id || "").replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase() || "····";
+// Stable 16-digit card number derived from the account id, with a Luhn check digit.
+function cardNumber(acct) {
+  const id = String(acct.id || "");
+  let h = 0n;
+  for (const ch of id) h = (h * 131n + BigInt(ch.charCodeAt(0))) % (10n ** 15n);
+  const base = ("9" + h.toString().padStart(15, "0")).slice(0, 15); // 15 digits, leading 9
+  let sum = 0, dbl = true;
+  for (let i = base.length - 1; i >= 0; i--) { let d = +base[i]; if (dbl) { d *= 2; if (d > 9) d -= 9; } sum += d; dbl = !dbl; }
+  return base + ((10 - (sum % 10)) % 10);
+}
 
 async function balance(id) { try { const b = await inc("/accounts/" + id + "/balance"); return cents(b.current_balance); } catch { return 0; } }
 async function txns(id, limit) {
   try {
     const d = await inc("/transactions?account_id=" + id + "&limit=" + (limit || 12));
-    return (d.data || []).map(t => ({ amount: cents(t.amount), when: when(t.created_at) }));
+    return (d.data || []).map(t => ({ amount: cents(t.amount), when: when(t.created_at), at: t.created_at }));
   } catch { return []; }
 }
 
@@ -113,18 +123,24 @@ export default async function handler(req, res) {
       if (isMerchant) {
         const cardAccts = all.filter(a => String(a.name || "").startsWith("Gift:"));
         const cards = await Promise.all(cardAccts.map(async a => ({
-          id: a.id, email: a.name.slice(5), code: codeFor(a), balance: await balance(a.id),
+          id: a.id, email: a.name.slice(5), code: codeFor(a), cardNumber: cardNumber(a), balance: await balance(a.id),
         })));
         cards.sort((x, y) => y.balance - x.balance);
-        const activity = (await txns(opId, 12)).map(t => ({ ...t, who: t.amount > 0 ? "Sale received" : "Transfer out" }));
+        // Per-customer transaction report, built from each gift card's ledger history.
+        // On a card: a negative entry is a redemption (sale), a positive entry is a load.
+        const lists = await Promise.all(cardAccts.map(async a => {
+          const list = await txns(a.id, 25);
+          return list.map(t => ({ email: a.name.slice(5), code: codeFor(a), amount: t.amount, when: t.when, at: t.at, who: t.amount < 0 ? "Sale" : "Load" }));
+        }));
+        const transactions = lists.flat().sort((x, y) => new Date(y.at || 0) - new Date(x.at || 0)).slice(0, 60);
         const ptsAccts = all.filter(a => String(a.name || "").startsWith("Points:"));
         const pointsIssued = (await Promise.all(ptsAccts.map(a => balance(a.id)))).reduce((x, y) => x + y, 0);
-        return res.status(200).json({ role: "merchant", email, name, cards, transactions: activity, posConnected: !!DK, pointsIssued });
+        return res.status(200).json({ role: "merchant", email, name, cards, transactions, posConnected: !!DK, pointsIssued });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
       return res.status(200).json({
-        role: "customer", email, name, cardId: card.id, code: codeFor(card),
+        role: "customer", email, name, cardId: card.id, code: codeFor(card), cardNumber: cardNumber(card),
         balance: await balance(card.id), points: await balance(pts.id), transactions: await txns(card.id, 12),
       });
     }
@@ -180,31 +196,22 @@ export default async function handler(req, res) {
     }
 
     if (action === "checkout") {
+      // Amount-based redemption. The store rings up the order in its own POS; here we
+      // just charge the gift card for the order total (no item detail needed).
       if (!isMerchant) return res.status(200).json({ error: "Only merchants can charge cards." });
       const cardId = body.cardId;
-      const items = Array.isArray(body.items) ? body.items : [];
-      if (!cardId) return res.status(200).json({ error: "Pick a card." });
-      if (!items.length) return res.status(200).json({ error: "Add at least one item." });
-      let subtotal = 0, taxAmount = 0;
-      const invItems = items.map(it => {
-        const q = Number(it.quantity) || 1;
-        const line = Math.round(Number(it.price) * q * 100) / 100;
-        subtotal += line;
-        if (it.taxable) taxAmount += Math.round(line * (Number(it.taxRate) || 0)) / 100;
-        return { productCode: String(it.code), quantity: q, unitPrice: Number(it.price), subtotal: line, isTaxable: !!it.taxable, discountAmount: 0 };
-      });
-      subtotal = Math.round(subtotal * 100) / 100;
-      taxAmount = Math.round(taxAmount * 100) / 100;
-      const total = Math.round((subtotal + taxAmount) * 100) / 100;
-      const totalCents = Math.round(total * 100);
+      const amountCents = Math.round(Number(body.amount) || 0);
+      if (!cardId) return res.status(200).json({ error: "Pick a customer." });
+      if (amountCents <= 0) return res.status(200).json({ error: "Enter a sale amount." });
       const bal = await balance(cardId);
-      if (totalCents > bal) return res.status(200).json({ error: "Card balance is only $" + (bal / 100).toFixed(2) + "." });
+      if (amountCents > bal) return res.status(200).json({ error: "Card balance is only $" + (bal / 100).toFixed(2) + "." });
+      const total = amountCents / 100;
 
       // 1) Deduct the gift balance in our ledger
-      const t = await inc("/account_transfers", "POST", { account_id: cardId, destination_account_id: opId, amount: totalCents, description: "Shuk Gift purchase" });
+      const t = await inc("/account_transfers", "POST", { account_id: cardId, destination_account_id: opId, amount: amountCents, description: "Shuk Gift purchase" });
       if (t && t.status === "pending_approval" && t.id) { try { await inc("/account_transfers/" + t.id + "/approve", "POST"); } catch {} }
 
-      // 2) Record the sale in the store's POS (best effort)
+      // 2) Record the redemption total in the store's POS (total only, best effort)
       let posInvoice = null, posError = null;
       if (DK) {
         try {
@@ -213,8 +220,8 @@ export default async function handler(req, res) {
           const now = new Date().toISOString();
           const ext = "SG" + Date.now().toString().slice(-16);
           await pos("/invoices", "POST", {
-            externalInvoiceId: ext, invoiceDate: now, orderMethod: "Pickup", taxAmount, taxableAmount: subtotal, customerId: custId,
-            items: invItems,
+            externalInvoiceId: ext, invoiceDate: now, orderMethod: "Pickup", taxAmount: 0, taxableAmount: 0, customerId: custId,
+            items: [{ productCode: "GIFT", quantity: 1, unitPrice: total, subtotal: total, isTaxable: false, discountAmount: 0, description: "Gift card redemption" }],
             payments: [{ paymentMethod: "APICreditCard", amount: total, referenceNo: ext.slice(0, 15), dateTime: now, cardholderName: "Shuk Gift", authorizationCode: ext.slice(0, 10), maskedCreditCardNumber: "************GIFT" }],
             memo: "Shuk Gift redemption",
           });
@@ -237,6 +244,31 @@ export default async function handler(req, res) {
       } catch {}
 
       return res.status(200).json({ ok: true, balance: await balance(cardId), total, posInvoice, posError, pointsAwarded });
+    }
+
+    if (action === "redeem") {
+      // Customer redeems loyalty points for store credit. 100 points = $1.00 (1 point = 1¢).
+      const points = Math.floor(Number(body.points) || 0);
+      if (points < 100) return res.status(200).json({ error: "Redeem at least 100 points ($1.00)." });
+      const pts = await ensurePoints(email);
+      const have = await balance(pts.id);
+      if (points > have) return res.status(200).json({ error: "You only have " + have + " points." });
+      const card = await ensureCard(email);
+      const creditCents = points; // 100 pts -> 100¢ -> $1.00
+      const t = await inc("/account_transfers", "POST", { account_id: pts.id, destination_account_id: opId, amount: points, description: "Points redeemed for credit" });
+      if (t && t.status === "pending_approval" && t.id) { try { await inc("/account_transfers/" + t.id + "/approve", "POST"); } catch {} }
+      await inc("/simulations/interest_payments", "POST", { account_id: card.id, amount: creditCents });
+      return res.status(200).json({ ok: true, points: await balance(pts.id), balance: await balance(card.id), credited: creditCents });
+    }
+
+    if (action === "customerSnapshot") {
+      // Merchant-only: returns the customer-facing view for one card (for the preview).
+      if (!isMerchant) return res.status(200).json({ error: "Merchants only." });
+      const acct = all.find(a => a.id === body.cardId && String(a.name || "").startsWith("Gift:"));
+      if (!acct) return res.status(200).json({ error: "Card not found." });
+      const em = acct.name.slice(5);
+      const pts = await ensurePoints(em);
+      return res.status(200).json({ email: em, code: codeFor(acct), cardNumber: cardNumber(acct), balance: await balance(acct.id), points: await balance(pts.id), transactions: await txns(acct.id, 12) });
     }
 
     return res.status(200).json({ error: "Unknown action." });
