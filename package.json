@@ -1,0 +1,9 @@
+{
+  "name": "shuk-wallet",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@clerk/backend": "^1.21.0"
+  }
+}

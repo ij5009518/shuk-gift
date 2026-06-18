@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Shuk Gift — store credit</title>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#f5f7f6; --surface2:#eef1f0; --line:#e5e9e7;
+    --ink:#0c1512; --muted:#5d6b65; --faint:#93a09a;
+    --accent:#0e9f6e; --accent2:#0b8a5f; --gold:#e6b450; --ok:#0e9f6e; --okbg:#e7f6ef;
+    --card1:#0b3b2e; --card2:#114b39;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:#eef1f0;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color-scheme:light;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select{font-family:inherit;color-scheme:light;}
+  svg{display:block;}
+  .app{max-width:900px;margin:0 auto;min-height:100vh;background:var(--bg);box-shadow:0 0 80px -34px rgba(12,21,18,.4);}
+
+  header{display:flex;align-items:center;gap:14px;padding:16px 26px;border-bottom:1px solid var(--line);}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.4px;}
+  .mark{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#3fd39a);display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;}
+  .grow{flex:1;}
+  .roles{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:3px;}
+  .roles button{border:none;background:none;padding:7px 15px;border-radius:8px;font-size:13px;font-weight:700;color:var(--muted);}
+  .roles button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .conn{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);}
+  .conn .dot{width:8px;height:8px;border-radius:50%;background:#c7cdca;}
+  .conn .dot.on{background:var(--accent);}
+
+  main{padding:26px;}
+  .view{animation:f .2s ease;} @keyframes f{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start;}
+
+  .gc{position:relative;border-radius:20px;padding:24px;color:#fff;overflow:hidden;background:radial-gradient(130% 130% at 100% 0%,#15614a 0%,var(--card2) 45%,var(--card1) 100%);box-shadow:0 20px 44px -22px rgba(12,21,18,.6);}
+  .gc .deco{position:absolute;top:-40px;right:-30px;width:160px;height:160px;border-radius:50%;background:rgba(63,211,154,.18);}
+  .gc .row1{display:flex;justify-content:space-between;align-items:center;position:relative;}
+  .gc .row1 .nm{font-weight:800;font-size:15px;letter-spacing:.3px;display:flex;align-items:center;gap:8px;}
+  .gc .row1 .nm .m{width:22px;height:22px;border-radius:6px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:12px;}
+  .gc .row1 .tag{font-size:10.5px;font-weight:700;letter-spacing:1.5px;opacity:.7;}
+  .gc .lbl{margin-top:26px;font-size:12px;opacity:.72;}
+  .gc .bal{font-size:38px;font-weight:850;letter-spacing:-1px;margin-top:2px;}
+  .gc .foot{display:flex;justify-content:space-between;margin-top:22px;font-size:11.5px;opacity:.7;letter-spacing:.5px;}
+
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:16px;}
+  .act{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:14px;display:flex;align-items:center;gap:11px;color:var(--ink);font-weight:700;font-size:14px;}
+  .act:hover{background:var(--surface2);}
+  .act .ic{width:34px;height:34px;border-radius:9px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;}
+  .act .ic svg{width:18px;height:18px;stroke:var(--accent);}
+
+  .block{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;}
+  .block h3{margin:0 0 14px;font-size:14px;font-weight:800;}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px;}
+  .stat .k{font-size:12px;color:var(--muted);font-weight:600;}
+  .stat .v{font-size:24px;font-weight:850;letter-spacing:-.5px;margin-top:4px;}
+  .stat .s{font-size:11.5px;color:var(--faint);margin-top:2px;}
+  .stat.green .v{color:var(--accent);}
+
+  .list{display:flex;flex-direction:column;}
+  .row{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line);}
+  .row:last-child{border-bottom:none;}
+  .row .ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--surface);flex:none;}
+  .row .ic svg{width:16px;height:16px;}
+  .row .nm{font-size:14px;font-weight:600;}
+  .row .dt{font-size:12px;color:var(--muted);margin-top:1px;}
+  .row .amt{margin-left:auto;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums;}
+  .amt.pos{color:var(--accent);} .amt.neg{color:var(--ink);}
+  .empty{color:var(--faint);font-size:13px;padding:14px 2px;}
+
+  .flabel{font-size:12.5px;font-weight:700;color:#3a463f;display:block;margin-top:6px;}
+  .fld{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;margin:5px 0 12px;background:#fff;color:var(--ink);}
+  .fld:focus{outline:none;border-color:var(--accent);}
+  .btn{border:none;border-radius:11px;padding:12px 18px;font-weight:800;font-size:14px;}
+  .btn.pri{background:var(--accent);color:#fff;width:100%;} .btn.pri:hover{background:var(--accent2);}
+  .btn.sub{background:var(--surface);color:var(--ink);border:1px solid var(--line);}
+  .note{font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:12px;}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--accent);background:var(--okbg);padding:5px 11px;border-radius:8px;}
+  .codebox{font-size:26px;font-weight:850;letter-spacing:6px;text-align:center;background:var(--surface);border:1px dashed #c7d2cd;border-radius:14px;padding:18px;margin-top:6px;font-variant-numeric:tabular-nums;}
+
+  .backdrop{position:fixed;inset:0;background:rgba(12,21,18,.45);display:none;z-index:50;}
+  .sheet{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(420px,92vw);background:#fff;border-radius:18px;padding:24px;box-shadow:0 30px 70px -24px rgba(0,0,0,.55);z-index:51;display:none;}
+  .sheet h3{margin:0 0 4px;font-size:18px;font-weight:850;}
+  .sheet .sub{color:var(--muted);font-size:13px;margin:0 0 14px;}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 12px;}
+  .seg button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 0;font-weight:700;font-size:14px;color:var(--ink);}
+  .seg button.on{border-color:var(--accent);background:var(--okbg);color:var(--accent2);}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-size:13.5px;max-width:420px;box-shadow:0 16px 34px -10px rgba(0,0,0,.5);display:none;z-index:60;text-align:center;}
+
+  @media(max-width:760px){ .grid2{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} header{padding:14px 16px;} main{padding:16px;} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span class="mark">S</span><span>Shuk Gift</span></div>
+    <span class="grow"></span>
+    <div class="roles">
+      <button class="on" data-role="customer">Customer</button>
+      <button data-role="merchant">Merchant</button>
+    </div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="connText">Demo mode</span></div>
+  </header>
+
+  <main>
+    <!-- CUSTOMER -->
+    <section class="view" id="v-customer">
+      <div class="grid2">
+        <div>
+          <div class="gc">
+            <div class="deco"></div>
+            <div class="row1"><span class="nm"><span class="m">S</span>Shuk Gift</span><span class="tag">STORE CREDIT</span></div>
+            <div class="lbl">Card balance</div>
+            <div class="bal" id="custBal">$0.00</div>
+            <div class="foot"><span id="custName">ISAAC JOSEPH</span><span id="custCode">CODE ····</span></div>
+          </div>
+          <div class="actions">
+            <button class="act" id="addFundsBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>Add funds</button>
+            <button class="act" id="payBtn"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 21v.01M21 14v.01M14 21v.01"/></svg></span>Pay in store</button>
+          </div>
+          <p class="note">Store credit can only be spent at Shuk locations — it can't be transferred to other people or cashed out. That's what keeps it a simple closed-loop card (no per-customer identity checks required).</p>
+        </div>
+        <div class="block">
+          <h3>Activity</h3>
+          <div class="list" id="custList"><div class="empty">No activity yet. Add funds to get started.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MERCHANT -->
+    <section class="view" id="v-merchant" hidden>
+      <div class="stats">
+        <div class="stat green"><div class="k">Funds held (float)</div><div class="v" id="mFloat">$0.00</div><div class="s">in your Increase account</div></div>
+        <div class="stat green"><div class="k">Yield on balance</div><div class="v">2.62%</div><div class="s" id="mYield">earning on the float</div></div>
+        <div class="stat"><div class="k">Outstanding credit</div><div class="v" id="mLiab">$0.00</div><div class="s">owed to cardholders</div></div>
+        <div class="stat"><div class="k">Active cards</div><div class="v" id="mCards">0</div><div class="s">customers with a balance</div></div>
+      </div>
+      <div class="grid2" style="margin-top:22px">
+        <div class="block">
+          <h3>Redeem at register</h3>
+          <label class="flabel">Customer card code</label>
+          <input class="fld" id="rCode" placeholder="e.g. 7842" autocomplete="off" />
+          <label class="flabel">Amount of sale</label>
+          <input class="fld" id="rAmt" type="number" min="0" step="0.01" placeholder="0.00" />
+          <button class="btn pri" id="redeemBtn">Charge card</button>
+          <p class="note">Charging decrements the customer's store credit (the sale). No money leaves your account — you keep the funds and provide the goods.</p>
+        </div>
+        <div class="block">
+          <h3>All activity</h3>
+          <div class="list" id="mList"><div class="empty">No activity yet.</div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Add funds sheet -->
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="addSheet">
+  <h3>Add store credit</h3>
+  <p class="sub">Funds are pulled from your bank (ACH) into Shuk's account.</p>
+  <label class="flabel">Amount</label>
+  <input class="fld" id="loadAmt" type="number" min="1" step="1" placeholder="0.00" />
+  <div class="seg" id="quick">
+    <button data-q="25">$25</button><button data-q="50">$50</button><button data-q="100">$100</button><button data-q="200">$200</button>
+  </div>
+  <label class="flabel">Fund from</label>
+  <select class="fld" id="loadBank"><option>Chase ••1187 (checking)</option><option>Bank of America ••5093</option></select>
+  <button class="btn pri" id="loadBtn">Add funds</button>
+  <button class="btn sub" id="loadCancel" style="width:100%;margin-top:8px">Cancel</button>
+  <p class="note" id="loadNote">In production the ACH pull settles in ~1–3 days; we credit the card once it clears. (Demo credits instantly.)</p>
+</div>
+
+<!-- Pay sheet -->
+<div class="sheet" id="paySheet">
+  <h3>Pay in store</h3>
+  <p class="sub">Show this code at the register to spend your balance.</p>
+  <div class="codebox" id="payCode">····</div>
+  <button class="btn sub" id="payClose" style="width:100%;margin-top:14px">Done</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const state={ connected:false, cards:[{id:"c1",name:"Isaac Joseph",code:"7842",balance:0}], txns:[] };
+  let current="c1";
+  const card=()=>state.cards.find(c=>c.id===current);
+  const fmt=c=>"$"+(c/100).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  function toast(m){const t=$("toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",3400);}
+
+  function liabilityCents(){ return state.cards.reduce((s,c)=>s+c.balance,0); }
+  function render(){
+    const c=card();
+    $("custBal").textContent=fmt(c.balance);
+    $("custName").textContent=c.name.toUpperCase();
+    $("custCode").textContent="CODE ••"+c.code.slice(-2);
+    $("payCode").textContent=c.code;
+    // customer activity
+    const cl=$("custList"), mine=state.txns.filter(t=>t.cardId===current);
+    cl.innerHTML = mine.length?"":'<div class="empty">No activity yet. Add funds to get started.</div>';
+    mine.slice().reverse().forEach(t=>cl.appendChild(rowEl(t,true)));
+    // merchant
+    $("mFloat").textContent=fmt(liabilityCents());
+    $("mLiab").textContent=fmt(liabilityCents());
+    $("mCards").textContent=state.cards.filter(c=>c.balance>0).length;
+    const ml=$("mList");
+    ml.innerHTML=state.txns.length?"":'<div class="empty">No activity yet.</div>';
+    state.txns.slice().reverse().forEach(t=>ml.appendChild(rowEl(t,false)));
+  }
+  function rowEl(t,cust){
+    const pos=t.type==="load";
+    const div=document.createElement("div");div.className="row";
+    const stroke=pos?"#0e9f6e":"#5d6b65";
+    const path=pos?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>';
+    const who=cust?(pos?"Added funds":"Purchase at Shuk"):(t.name+" · "+(pos?"loaded":"spent"));
+    div.innerHTML='<div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+who+'</div><div class="dt">'+t.when+'</div></div><div class="amt '+(pos?"pos":"neg")+'">'+(pos?"+":"−")+fmt(t.cents)+'</div>';
+    return div;
+  }
+  function addTxn(type,cents,name){ state.txns.push({cardId:current,type,cents,name:name||card().name,when:"Just now"}); }
+
+  // role toggle
+  document.querySelectorAll("[data-role]").forEach(b=>b.addEventListener("click",()=>{
+    const r=b.getAttribute("data-role");
+    document.querySelectorAll("[data-role]").forEach(x=>x.classList.toggle("on",x===b));
+    $("v-customer").hidden=r!=="customer"; $("v-merchant").hidden=r!=="merchant"; render();
+  }));
+
+  // add funds
+  function openSheet(id){$("backdrop").style.display="block";$(id).style.display="block";}
+  function closeSheets(){$("backdrop").style.display="none";$("addSheet").style.display="none";$("paySheet").style.display="none";}
+  $("addFundsBtn").addEventListener("click",()=>{ $("loadAmt").value=""; document.querySelectorAll("#quick button").forEach(x=>x.classList.remove("on")); openSheet("addSheet"); });
+  $("payBtn").addEventListener("click",()=>openSheet("paySheet"));
+  $("loadCancel").addEventListener("click",closeSheets);
+  $("payClose").addEventListener("click",closeSheets);
+  $("backdrop").addEventListener("click",closeSheets);
+  document.querySelectorAll("#quick button").forEach(b=>b.addEventListener("click",()=>{ $("loadAmt").value=b.getAttribute("data-q"); document.querySelectorAll("#quick button").forEach(x=>x.classList.toggle("on",x===b)); }));
+
+  $("loadBtn").addEventListener("click",async ()=>{
+    const amt=Math.round(parseFloat($("loadAmt").value)*100);
+    if(!amt||amt<=0){toast("Enter an amount.");return;}
+    if(amt>200000){toast("Closed-loop demo cap is $2,000 per load.");return;}
+    // tell the backend (real ACH in production; sandbox/demo here)
+    try{ await fetch("/api/increase",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"load",amount:amt})}); }catch(e){}
+    card().balance+=amt; addTxn("load",amt); render(); closeSheets();
+    toast("Added "+fmt(amt)+" to your card.");
+  });
+
+  // merchant redeem
+  $("redeemBtn").addEventListener("click",()=>{
+    const code=$("rCode").value.trim(); const amt=Math.round(parseFloat($("rAmt").value)*100);
+    const c=state.cards.find(x=>x.code===code);
+    if(!c){toast("No card with that code. (Try "+card().code+")");return;}
+    if(!amt||amt<=0){toast("Enter a sale amount.");return;}
+    if(amt>c.balance){toast("Card balance is only "+fmt(c.balance)+".");return;}
+    c.balance-=amt; state.txns.push({cardId:c.id,type:"spend",cents:amt,name:c.name,when:"Just now"});
+    $("rCode").value="";$("rAmt").value=""; render();
+    toast("Charged "+fmt(amt)+" to "+c.name+"'s card.");
+  });
+
+  // connect to Increase
+  async function connect(){
+    try{
+      const d=await (await fetch("/api/increase",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status"})})).json();
+      if(d&&d.connected){ state.connected=true; $("dot").className="dot on"; $("connText").textContent="Connected to Increase (sandbox)"; $("mYield").textContent="paid by Increase on the float"; }
+      else if(d&&d.needsKey){ $("connText").textContent="Demo mode — add Increase key to go live"; }
+      else { $("connText").textContent="Demo mode"; }
+    }catch(e){ $("connText").textContent="Demo mode"; }
+  }
+
+  render(); connect();
+</script>
+</body>
+</html>
