@@ -426,6 +426,7 @@
         kpi("Funds held",fmt(st.fundsHeld||0),'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',true)+
         kpi("Sales (today)",fmt(st.salesTodayTotal||0),'<path d="M3 3v18h18M7 14l4-4 3 3 5-6"/>',true)+
         kpi("Sales (all-time)",fmt(st.salesTotal||0),'<path d="M3 3v18h18M19 9l-5 5-4-4-4 4"/>')+
+        kpi("Fee revenue",fmt(st.feeRevenue||0),'<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5M12 17h.01"/>',true)+
         kpi("Points issued",(st.pointsIssued||0).toLocaleString(),'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>')+
         kpi("Customers",(st.customerCount||0).toLocaleString(),'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/>')+
         kpi("Active cards",(st.activeCards||0).toLocaleString(),'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>')+
@@ -453,7 +454,7 @@
   }
   function renderStores(s,stores){
     s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px"><div><h3 style="margin:0">Stores ('+stores.length+')</h3><span class="note" style="margin:0">Each store earns its customers its own rewards rate.</span></div><button class="btn pri" id="addStore" style="width:auto;padding:9px 14px;font-size:13px;white-space:nowrap">+ Add store</button></div>'+
-      (stores.length?'<table class="tbl"><thead><tr><th>Store</th><th>Login email</th><th class="right">Rewards</th><th class="right">Sales</th><th>Status</th><th></th></tr></thead><tbody>'+stores.map(x=>'<tr><td><b>'+esc(x.name)+'</b>'+(x.note?'<div class="dt">'+esc(x.note)+'</div>':'')+'</td><td class="tnum" style="color:var(--muted)">'+esc(x.email)+'</td><td class="right tnum"><b>'+x.rewardsPercent+'%</b></td><td class="right tnum"><b>'+fmt(x.salesTotal||0)+'</b><div class="dt">'+(x.salesCount||0)+' sale'+((x.salesCount||0)===1?"":"s")+'</div></td><td><span class="pill2 '+(x.active?"on":"off")+'">'+(x.active?"Active":"Inactive")+'</span></td><td class="right" style="white-space:nowrap"><button class="go viewSales" data-email="'+escAttr(x.email)+'" style="background:var(--surface);color:var(--ink)">Sales</button><button class="go editStore" data-email="'+escAttr(x.email)+'" style="margin-left:6px;background:var(--surface);color:var(--ink)">Edit</button></td></tr>').join("")+'</tbody></table>':'<div class="empty">No stores yet. Add your first store to set its rewards rate and give it a login.</div>')+'</div>';
+      (stores.length?'<table class="tbl"><thead><tr><th>Store</th><th class="right">Reward</th><th class="right">Fee</th><th class="right">Sales</th><th class="right">Fees</th><th class="right">Owed</th><th>Status</th><th></th></tr></thead><tbody>'+stores.map(x=>'<tr><td><b>'+esc(x.name)+'</b><div class="dt" style="color:var(--muted)">'+esc(x.email)+'</div></td><td class="right tnum">'+x.rewardsPercent+'%</td><td class="right tnum"><b>'+(x.feePercent||0)+'%</b></td><td class="right tnum"><b>'+fmt(x.salesTotal||0)+'</b><div class="dt">'+(x.salesCount||0)+' sale'+((x.salesCount||0)===1?"":"s")+'</div></td><td class="right tnum">'+fmt(x.feesCollected||0)+'</td><td class="right tnum">'+fmt(x.owed||0)+'</td><td><span class="pill2 '+(x.active?"on":"off")+'">'+(x.active?"Active":"Inactive")+'</span></td><td class="right" style="white-space:nowrap"><button class="go viewSales" data-email="'+escAttr(x.email)+'" style="background:var(--surface);color:var(--ink)">Sales</button><button class="go editStore" data-email="'+escAttr(x.email)+'" style="margin-left:6px;background:var(--surface);color:var(--ink)">Edit</button></td></tr>').join("")+'</tbody></table><p class="note">Reward = % back to the customer. Fee = % the platform charges the store per sale. Owed = settlement we hold for the store (sales net of fees), tracked in the ledger.</p>':'<div class="empty">No stores yet. Add your first store to set its rates and give it a login.</div>')+'</div>';
     $("addStore").addEventListener("click",()=>openStore(null));
     s.querySelectorAll(".editStore").forEach(b=>b.addEventListener("click",()=>{ const em=b.getAttribute("data-email"); openStore(stores.find(x=>x.email===em)||null); }));
     s.querySelectorAll(".viewSales").forEach(b=>b.addEventListener("click",()=>{ txStoreFilter=b.getAttribute("data-email"); page="activity"; buildNav(); render(); }));
@@ -523,7 +524,8 @@
     const {el,close}=sheet('<h3>'+(editing?"Edit store":"Add store")+'</h3><p class="sub">Set the store login and its rewards rate.</p>'+
       '<label class="flabel">Store name</label><input class="fld" id="sName" value="'+escAttr(e.name||"")+'" placeholder="e.g. Shuk Midtown" />'+
       '<label class="flabel">Login email</label><input class="fld" id="sEmail" type="email" value="'+escAttr(e.email||"")+'" placeholder="store@email.com" '+(editing?"disabled":"")+' />'+
-      '<label class="flabel">Rewards rate — % back as points</label><input class="fld" id="sRew" type="number" min="0" max="25" step="0.5" value="'+(e.rewardsPercent!=null?e.rewardsPercent:(prog().rewardsPercent||1))+'" />'+
+      '<label class="flabel">Reward rate — % back to the customer</label><input class="fld" id="sRew" type="number" min="0" max="25" step="0.5" value="'+(e.rewardsPercent!=null?e.rewardsPercent:(prog().rewardsPercent||1))+'" />'+
+      '<label class="flabel">Transaction fee — % the platform charges this store</label><input class="fld" id="sFee" type="number" min="0" max="100" step="0.25" value="'+(e.feePercent!=null?e.feePercent:0)+'" />'+
       '<label class="flabel">Note (optional)</label><input class="fld" id="sNote" value="'+escAttr(e.note||"")+'" placeholder="Location, manager, etc." />'+
       '<label style="display:flex;align-items:center;gap:9px;margin:2px 0 14px;font-size:13.5px;font-weight:650;cursor:pointer"><input type="checkbox" id="sActive" '+(e.active===false?"":"checked")+' /> Active — can sign in and charge cards</label>'+
       '<button class="btn pri" id="sSave">'+(editing?"Save store":"Add store")+'</button>'+
@@ -533,7 +535,7 @@
     el.querySelector("#sSave").addEventListener("click",async()=>{
       const email=editing?e.email:(el.querySelector("#sEmail").value||"").trim().toLowerCase();
       const nm=(el.querySelector("#sName").value||"").trim();
-      const storeObj={ name:nm, rewardsPercent:parseFloat(el.querySelector("#sRew").value)||0, note:el.querySelector("#sNote").value, active:el.querySelector("#sActive").checked };
+      const storeObj={ name:nm, rewardsPercent:parseFloat(el.querySelector("#sRew").value)||0, feePercent:parseFloat(el.querySelector("#sFee").value)||0, note:el.querySelector("#sNote").value, active:el.querySelector("#sActive").checked };
       if(!/.+@.+\..+/.test(email)){ toast("Enter a valid store email."); return; }
       if(!nm){ toast("Enter a store name."); return; }
       const g=el.querySelector("#sSave"); g.disabled=true; g.innerHTML='<span class="spin"></span>';
@@ -593,12 +595,13 @@
       return;
     }
     // dashboard (store)
-    const st=ME.stats||{}, sname=(ME.store&&ME.store.name)||store(), srate=(ME.store&&ME.store.rewardsPercent!=null)?ME.store.rewardsPercent:(prog().rewardsPercent||0);
+    const st=ME.stats||{}, sname=(ME.store&&ME.store.name)||store(), srate=(ME.store&&ME.store.rewardsPercent!=null)?ME.store.rewardsPercent:(prog().rewardsPercent||0), sfee=(ME.store&&ME.store.feePercent)||0;
     s.innerHTML=
-      '<div class="block" style="margin-bottom:16px;background:linear-gradient(120deg,#0e9f6e,#0b8a5f);color:#fff;border:none;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><div style="font-weight:850;font-size:16px">'+esc(sname)+'</div><div style="font-size:13px;opacity:.93">Customers earn '+srate+'% back here · POS '+(ME.posConnected?"connected":"not connected")+'</div></div><button class="btn sub" id="goCharge" style="width:auto;background:rgba(255,255,255,.18);color:#fff;border:none">+ New charge</button></div>'+
+      '<div class="block" style="margin-bottom:16px;background:linear-gradient(120deg,#0e9f6e,#0b8a5f);color:#fff;border:none;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><div style="font-weight:850;font-size:16px">'+esc(sname)+'</div><div style="font-size:13px;opacity:.93">Customers earn '+srate+'% back · '+sfee+'% platform fee · POS '+(ME.posConnected?"connected":"not connected")+'</div></div><button class="btn sub" id="goCharge" style="width:auto;background:rgba(255,255,255,.18);color:#fff;border:none">+ New charge</button></div>'+
       '<div class="stats"><div class="stat green"><div class="k">Sales today</div><div class="v">'+fmt(st.salesTodayTotal||0)+'</div></div>'+
-      '<div class="stat"><div class="k">Sales today (count)</div><div class="v">'+(st.salesTodayCount||0)+'</div></div>'+
-      '<div class="stat green"><div class="k">Total sales</div><div class="v">'+fmt(st.salesTotal||0)+'</div></div></div>'+
+      '<div class="stat green"><div class="k">Total sales</div><div class="v">'+fmt(st.salesTotal||0)+'</div></div>'+
+      '<div class="stat"><div class="k">Owed to you</div><div class="v">'+fmt(st.owed||0)+'</div></div></div>'+
+      '<p class="note" style="margin:8px 2px 0">"Owed to you" is your sales minus the '+sfee+'% platform fee — settled to your account. Fees paid so far: '+fmt(st.feesPaid||0)+'.</p>'+
       '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent sales</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(merchRow).join(""):'<div class="empty">No sales yet. Use Charge to ring one up.</div>')+'</div></div>';
     var gc=$("goCharge"); if(gc) gc.addEventListener("click",()=>{ page="checkout"; buildNav(); render(); });
   }
@@ -674,8 +677,9 @@
     const r=await api("checkout",{cardId,amount:amt});
     if(r&&r.ok){
       selectedCard=null;
-      let msg="Charged "+fmt(Math.round(r.total*100))+" · "+(r.pointsAwarded||0)+" pts earned";
-      msg += r.posInvoice ? " · sale recorded in POS" : (r.posError ? " · POS not synced" : "");
+      let msg="Charged "+fmt(Math.round(r.total*100))+" · "+(r.pointsAwarded||0)+" pts";
+      if(r.fee>0) msg+=" · "+fmt(Math.round(r.fee*100))+" fee, "+fmt(Math.round(r.net*100))+" to you";
+      msg += r.posInvoice ? " · POS ✓" : (r.posError ? " · POS not synced" : "");
       toast(msg); await refresh(); page="activity"; buildNav(); render();
     } else { toast(r&&r.error?r.error:"Charge failed."); btn.disabled=false; btn.textContent="Charge gift card"; }
   }
