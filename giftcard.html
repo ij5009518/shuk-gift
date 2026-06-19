@@ -168,7 +168,7 @@
   const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   const escAttr=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
   function toast(m){const t=$("toast");t.innerHTML=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",3600);}
-  let clerkActive=false, ME=null, page="home", PREVIEW=null, selectedCard=null;
+  let clerkActive=false, ME=null, page="home", PREVIEW=null, selectedCard=null, txStoreFilter="";
 
   async function api(action, body){
     const headers={"Content-Type":"application/json"};
@@ -249,7 +249,7 @@
     const pos=(t.amount||0)>0;
     const stroke=pos?"#0e9f6e":"#5d6b65";
     const path=pos?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>';
-    const label=txLabel(t);
+    const label=txLabel(t)+(!pos&&t.storeName?' · '+esc(t.storeName):'');
     return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(pos?"pos":"neg")+'">'+(pos?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>';
   }
   function merchRow(t){
@@ -257,7 +257,8 @@
     const stroke=sale?"#5d6b65":"#0e9f6e";
     const path=sale?'<path d="M12 19V5M5 12l7-7 7 7"/>':'<path d="M12 5v14M5 12l7 7 7-7"/>';
     const label=t.who||(sale?"Sale":"Load");
-    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+(t.email?' · '+t.email:'')+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(sale?"neg":"pos")+'">'+(sale?"−":"+")+fmt(Math.abs(t.amount))+'</div></div>';
+    const sub=(t.when||"")+(sale&&t.storeName?' · '+esc(t.storeName):'');
+    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+(t.email?' · '+esc(t.email):'')+'</div><div class="dt">'+sub+'</div></div><div class="amt '+(sale?"neg":"pos")+'">'+(sale?"−":"+")+fmt(Math.abs(t.amount))+'</div></div>';
   }
   function render(){
     $("pageTitle").textContent=(titles[page]||(()=>"Shuk Gift"))(ME);
@@ -271,7 +272,9 @@
   function renderCustomer(s){
     const txns=ME.transactions||[];
     if(page==="activity"){
-      s.innerHTML='<div class="block"><h3>Activity</h3><div class="list">'+(txns.length?txns.map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
+      const sum=ME.summary||{};
+      s.innerHTML='<div class="stats" style="margin-bottom:16px"><div class="stat green"><div class="k">Loaded in</div><div class="v">'+fmt(sum.loaded||0)+'</div></div><div class="stat"><div class="k">Spent</div><div class="v">'+fmt(sum.spent||0)+'</div></div><div class="stat green"><div class="k">Points</div><div class="v">'+(ME.points||0)+'</div></div></div>'+
+        '<div class="block"><h3>Activity</h3><div class="list">'+(txns.length?txns.map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
       return;
     }
     if(page==="rewards"){ renderRewards(s); return; }
@@ -341,7 +344,10 @@
     if(page==="customers"){ renderCustomers(s,cards); return; }
     if(page==="program"){ renderProgram(s); return; }
     if(page==="activity"){
-      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">All transactions</h3><span class="note" style="margin:0">'+txns.length+' record'+(txns.length===1?"":"s")+'</span></div><div class="list">'+(txns.length?txns.map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
+      const opts='<option value="">All stores</option>'+stores.map(x=>'<option value="'+escAttr(x.email)+'"'+(x.email===txStoreFilter?" selected":"")+'>'+esc(x.name)+'</option>').join("");
+      const filtered=txStoreFilter?txns.filter(t=>t.store===txStoreFilter):txns;
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Transactions</h3><select class="fld" id="txFilter" style="width:auto;margin:0;padding:8px 12px">'+opts+'</select></div><div class="list">'+(filtered.length?filtered.map(merchRow).join(""):'<div class="empty">No transactions'+(txStoreFilter?' for this store':'')+'.</div>')+'</div></div>';
+      $("txFilter").addEventListener("change",e=>{ txStoreFilter=e.target.value; render(); });
       return;
     }
     // Overview
@@ -349,7 +355,9 @@
     s.innerHTML=
       '<div class="kpi">'+
         kpi("Funds held",fmt(st.fundsHeld||0),'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',true)+
-        kpi("Points issued",(st.pointsIssued||0).toLocaleString(),'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>',true)+
+        kpi("Sales (today)",fmt(st.salesTodayTotal||0),'<path d="M3 3v18h18M7 14l4-4 3 3 5-6"/>',true)+
+        kpi("Sales (all-time)",fmt(st.salesTotal||0),'<path d="M3 3v18h18M19 9l-5 5-4-4-4 4"/>')+
+        kpi("Points issued",(st.pointsIssued||0).toLocaleString(),'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>')+
         kpi("Customers",(st.customerCount||0).toLocaleString(),'<circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/>')+
         kpi("Active cards",(st.activeCards||0).toLocaleString(),'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>')+
         kpi("Stores",(st.storeCount||0).toLocaleString(),'<path d="M3 9l1.2-5h15.6L21 9M4 9v11h16V9"/>')+
@@ -376,9 +384,10 @@
   }
   function renderStores(s,stores){
     s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px"><div><h3 style="margin:0">Stores ('+stores.length+')</h3><span class="note" style="margin:0">Each store earns its customers its own rewards rate.</span></div><button class="btn pri" id="addStore" style="width:auto;padding:9px 14px;font-size:13px;white-space:nowrap">+ Add store</button></div>'+
-      (stores.length?'<table class="tbl"><thead><tr><th>Store</th><th>Login email</th><th class="right">Rewards</th><th>Status</th><th></th></tr></thead><tbody>'+stores.map(x=>'<tr><td><b>'+esc(x.name)+'</b>'+(x.note?'<div class="dt">'+esc(x.note)+'</div>':'')+'</td><td class="tnum" style="color:var(--muted)">'+esc(x.email)+'</td><td class="right tnum"><b>'+x.rewardsPercent+'%</b></td><td><span class="pill2 '+(x.active?"on":"off")+'">'+(x.active?"Active":"Inactive")+'</span></td><td class="right"><button class="go editStore" data-email="'+escAttr(x.email)+'" style="background:var(--surface);color:var(--ink)">Edit</button></td></tr>').join("")+'</tbody></table>':'<div class="empty">No stores yet. Add your first store to set its rewards rate and give it a login.</div>')+'</div>';
+      (stores.length?'<table class="tbl"><thead><tr><th>Store</th><th>Login email</th><th class="right">Rewards</th><th class="right">Sales</th><th>Status</th><th></th></tr></thead><tbody>'+stores.map(x=>'<tr><td><b>'+esc(x.name)+'</b>'+(x.note?'<div class="dt">'+esc(x.note)+'</div>':'')+'</td><td class="tnum" style="color:var(--muted)">'+esc(x.email)+'</td><td class="right tnum"><b>'+x.rewardsPercent+'%</b></td><td class="right tnum"><b>'+fmt(x.salesTotal||0)+'</b><div class="dt">'+(x.salesCount||0)+' sale'+((x.salesCount||0)===1?"":"s")+'</div></td><td><span class="pill2 '+(x.active?"on":"off")+'">'+(x.active?"Active":"Inactive")+'</span></td><td class="right" style="white-space:nowrap"><button class="go viewSales" data-email="'+escAttr(x.email)+'" style="background:var(--surface);color:var(--ink)">Sales</button><button class="go editStore" data-email="'+escAttr(x.email)+'" style="margin-left:6px;background:var(--surface);color:var(--ink)">Edit</button></td></tr>').join("")+'</tbody></table>':'<div class="empty">No stores yet. Add your first store to set its rewards rate and give it a login.</div>')+'</div>';
     $("addStore").addEventListener("click",()=>openStore(null));
     s.querySelectorAll(".editStore").forEach(b=>b.addEventListener("click",()=>{ const em=b.getAttribute("data-email"); openStore(stores.find(x=>x.email===em)||null); }));
+    s.querySelectorAll(".viewSales").forEach(b=>b.addEventListener("click",()=>{ txStoreFilter=b.getAttribute("data-email"); page="activity"; buildNav(); render(); }));
   }
   function renderCustomers(s,cards){
     s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px"><div><h3 style="margin:0">Customers ('+cards.length+')</h3><span class="note" style="margin:0">Every cardholder, balance, and points total.</span></div><button class="btn pri" id="issueBtn2" style="width:auto;padding:9px 14px;font-size:13px;white-space:nowrap">+ Issue / load</button></div>'+
@@ -441,7 +450,7 @@
       return;
     }
     if(page==="activity"){
-      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">All transactions</h3><span class="note" style="margin:0">'+txns.length+' record'+(txns.length===1?"":"s")+'</span></div><div class="list">'+(txns.length?txns.map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">My sales</h3><span class="note" style="margin:0">'+txns.length+' sale'+(txns.length===1?"":"s")+'</span></div><div class="list">'+(txns.length?txns.map(merchRow).join(""):'<div class="empty">No sales yet. Charge a gift card to get started.</div>')+'</div></div>';
       return;
     }
     if(page==="customers"){
@@ -468,13 +477,15 @@
       $("coAmt").focus();
       return;
     }
-    // dashboard
+    // dashboard (store)
+    const st=ME.stats||{}, sname=(ME.store&&ME.store.name)||store(), srate=(ME.store&&ME.store.rewardsPercent!=null)?ME.store.rewardsPercent:(prog().rewardsPercent||0);
     s.innerHTML=
-      '<div class="stats"><div class="stat green"><div class="k">Funds held</div><div class="v">'+fmt(total)+'</div></div>'+
-      '<div class="stat green"><div class="k">Points issued</div><div class="v">'+(ME.pointsIssued||0)+'</div></div>'+
-      '<div class="stat"><div class="k">Active cards</div><div class="v">'+cards.filter(c=>c.balance>0).length+'</div></div></div>'+
-      '<div style="margin:14px 0 4px"><span class="badge" style="background:'+(ME.posConnected?"var(--okbg)":"#fdecec")+';color:'+(ME.posConnected?"var(--accent2)":"#b91c1c")+'">● Store POS '+(ME.posConnected?"connected":"not connected")+'</span></div>'+
-      '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent transactions</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(merchRow).join(""):'<div class="empty">No transactions yet.</div>')+'</div></div>';
+      '<div class="block" style="margin-bottom:16px;background:linear-gradient(120deg,#0e9f6e,#0b8a5f);color:#fff;border:none;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><div style="font-weight:850;font-size:16px">'+esc(sname)+'</div><div style="font-size:13px;opacity:.93">Customers earn '+srate+'% back here · POS '+(ME.posConnected?"connected":"not connected")+'</div></div><button class="btn sub" id="goCharge" style="width:auto;background:rgba(255,255,255,.18);color:#fff;border:none">+ New charge</button></div>'+
+      '<div class="stats"><div class="stat green"><div class="k">Sales today</div><div class="v">'+fmt(st.salesTodayTotal||0)+'</div></div>'+
+      '<div class="stat"><div class="k">Sales today (count)</div><div class="v">'+(st.salesTodayCount||0)+'</div></div>'+
+      '<div class="stat green"><div class="k">Total sales</div><div class="v">'+fmt(st.salesTotal||0)+'</div></div></div>'+
+      '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent sales</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(merchRow).join(""):'<div class="empty">No sales yet. Use Charge to ring one up.</div>')+'</div></div>';
+    var gc=$("goCharge"); if(gc) gc.addEventListener("click",()=>{ page="checkout"; buildNav(); render(); });
   }
 
   /* ----- Merchant: Program & rewards settings ----- */
