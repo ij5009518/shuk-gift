@@ -498,7 +498,8 @@ export default async function handler(req, res) {
       if (!acct) return res.status(200).json({ error: "Card not found." });
       const em = acct.name.slice(5);
       const pts = await ensurePoints(em);
-      return res.status(200).json({ email: em, code: codeFor(acct), cardNumber: cardNumber(acct), balance: await balance(acct.id), points: await balance(pts.id), transactions: await txns(acct.id, 12) });
+      const ctx = (await txns(acct.id, 12)).map(t => ({ ...t, ...resolveStore(t) }));
+      return res.status(200).json({ email: em, code: codeFor(acct), cardNumber: cardNumber(acct), balance: await balance(acct.id), points: await balance(pts.id), transactions: ctx });
     }
 
     return res.status(200).json({ error: "Unknown action." });
