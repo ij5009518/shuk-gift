@@ -1,6 +1,5 @@
 // Shuk Gift backend. Auth via Clerk session; balances/ledger held as real bank
 // accounts (one per customer) with the banking provider. No provider names exposed.
-import crypto from "crypto";
 const IB = process.env.INCREASE_BASE_URL || "https://sandbox.increase.com";
 const IK = process.env.INCREASE_API_KEY;
 
@@ -45,6 +44,18 @@ function cleanProgram(p) {
     redeemMinPoints: Math.max(1, Math.round(num(o.redeemMinPoints, PROGRAM_DEFAULTS.redeemMinPoints, 100000))),
   };
 }
+// Per-store config (admin-managed). Each store can set its own rewards rate.
+function cleanStore(s, email) {
+  const o = s || {};
+  const num = (v, d, max) => { let n = Number(v); if (!isFinite(n) || n < 0) n = d; if (max != null && n > max) n = max; return n; };
+  const nm = String(o.name == null ? "" : o.name).trim().slice(0, 60) || String(email || "").split("@")[0];
+  return {
+    name: nm,
+    rewardsPercent: num(o.rewardsPercent, PROGRAM_DEFAULTS.rewardsPercent, 25),
+    active: o.active === false ? false : true,
+    note: String(o.note == null ? "" : o.note).trim().slice(0, 120),
+  };
+}
 async function loadProgram(clerk, knownUser) {
   let holder = null;
   if (knownUser && (knownUser.emailAddresses || []).some(e => (e.emailAddress || "").toLowerCase() === CONFIG_EMAIL)) holder = knownUser;
@@ -52,7 +63,10 @@ async function loadProgram(clerk, knownUser) {
     try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {}
   }
   const saved = (holder && holder.privateMetadata && holder.privateMetadata.program) || {};
-  return { holder, program: cleanProgram({ ...PROGRAM_DEFAULTS, ...saved }) };
+  const savedStores = (holder && holder.privateMetadata && holder.privateMetadata.stores) || {};
+  const stores = {};
+  for (const k of Object.keys(savedStores)) { const em = k.toLowerCase(); stores[em] = cleanStore(savedStores[k], em); }
+  return { holder, program: cleanProgram({ ...PROGRAM_DEFAULTS, ...saved }), stores };
 }
 
 async function inc(path, method = "GET", body) {
@@ -101,82 +115,6 @@ async function findBank(em) {
   } catch { return null; }
 }
 
-// List ALL of a customer's linked banks (active external accounts tagged for them).
-async function listBanks(em) {
-  try {
-    const d = await inc("/external_accounts?limit=100");
-    return (d.data || [])
-      .filter(x => (x.description || "") === "Bank:" + em && (x.status === undefined || x.status === "active"))
-      .map(x => ({
-        id: x.id,
-        last4: String(x.account_number || "").slice(-4),
-        routingLast4: String(x.routing_number || "").slice(-4),
-        funding: x.funding || "checking",
-        created: x.created_at || null,
-      }));
-  } catch { return []; }
-}
-
-// ---- Auto top-up (recurring / low-balance auto-reload) ----
-// Rule lives in the customer's Clerk private metadata under shuk.autoReload:
-//   { enabled, mode: "low"|"weekly"|"monthly", thresholdCents, amountCents, nextRun, lastRun }
-function autoCfg(user) {
-  const a = (user && user.privateMetadata && user.privateMetadata.shuk && user.privateMetadata.shuk.autoReload) || null;
-  if (!a) return null;
-  return {
-    enabled: !!a.enabled,
-    mode: ["low", "weekly", "monthly"].includes(a.mode) ? a.mode : "low",
-    thresholdCents: Math.max(0, Math.round(Number(a.thresholdCents) || 0)),
-    amountCents: Math.max(0, Math.round(Number(a.amountCents) || 0)),
-    nextRun: Number(a.nextRun) || 0,
-    lastRun: Number(a.lastRun) || 0,
-  };
-}
-function nextRunFrom(mode, from) {
-  const d = new Date(from || Date.now());
-  if (mode === "weekly") { d.setDate(d.getDate() + 7); return d.getTime(); }
-  if (mode === "monthly") { d.setMonth(d.getMonth() + 1); return d.getTime(); }
-  return 0;
-}
-// Pull funds from a linked bank into a card via ACH debit (sandbox auto-settles).
-async function achPull(cardId, bankId, amount, descriptor) {
-  let tr;
-  try { tr = await inc("/ach_transfers", "POST", { account_id: cardId, amount: -amount, statement_descriptor: descriptor || "Shuk Auto", external_account_id: bankId }); }
-  catch { return { ok: false }; }
-  if (tr && tr.status === "pending_approval" && tr.id) { try { await inc("/ach_transfers/" + tr.id + "/approve", "POST"); } catch {} }
-  let settled = false;
-  if (tr && tr.id && /sandbox/.test(IB)) {
-    try { await inc("/simulations/ach_transfers/" + tr.id + "/settle", "POST"); settled = true; }
-    catch { try { await inc("/simulations/ach_transfers/" + tr.id + "/acknowledge", "POST"); } catch {} }
-  }
-  return { ok: true, settled, status: (tr && tr.status) || "pending" };
-}
-// Evaluate a customer's auto-reload rule and fire it if due. Persists nextRun/lastRun.
-// `getBalance` lets the caller supply a known balance to avoid an extra fetch.
-async function runAutoReload(clerk, user, email, cardId, currentBalance) {
-  const cfg = autoCfg(user);
-  if (!cfg || !cfg.enabled || cfg.amountCents <= 0) return { ran: false };
-  const bank = await findBank(email);
-  if (!bank) return { ran: false, reason: "nobank" };
-  const now = Date.now();
-  if (cfg.lastRun && now - cfg.lastRun < 60000) return { ran: false }; // throttle
-  let due = false, advance = false;
-  if (cfg.mode === "low") { if (currentBalance < cfg.thresholdCents) due = true; }
-  else if (!cfg.nextRun || now >= cfg.nextRun) { due = true; advance = true; }
-  if (!due) return { ran: false };
-  const r = await achPull(cardId, bank.id, cfg.amountCents);
-  if (!r.ok) return { ran: false };
-  const patch = { lastRun: now };
-  if (advance) patch.nextRun = nextRunFrom(cfg.mode, now);
-  try {
-    const shuk = (user.privateMetadata && user.privateMetadata.shuk) || {};
-    const merged = { ...shuk, autoReload: { ...(shuk.autoReload || {}), ...patch } };
-    await clerk.users.updateUserMetadata(user.id, { privateMetadata: { shuk: merged } });
-    if (user.privateMetadata) user.privateMetadata.shuk = merged;
-  } catch {}
-  return { ran: true, amount: cfg.amountCents, settled: r.settled };
-}
-
 // ---- POS connector (records sales in the store's point-of-sale) ----
 const DK = process.env.DECIMAL_API_KEY;
 const DB = process.env.DECIMAL_BASE_URL || "https://api.poswithlogic.dev";
@@ -192,32 +130,6 @@ async function pos(path, method = "GET", body) {
 }
 const posList = (d) => Array.isArray(d) ? d : (d.results || d.data || d.items || d.records || []);
 async function posCustomerId() { try { const c = posList(await pos("/customers?take=1"))[0]; return c && (c.id ?? c.customerId); } catch { return null; } }
-
-// IVR/SMS PIN hash. MUST stay identical to api/ivr.js pinHash().
-function ivrPinHash(email, pin) { return crypto.createHmac("sha256", process.env.CLERK_SECRET_KEY || "shuk-ivr").update("pin:" + String(email).toLowerCase() + ":" + String(pin)).digest("hex"); }
-// Normalize a US phone number to E.164 (+1XXXXXXXXXX).
-function e164(p) { let d = String(p || "").replace(/[^\d]/g, ""); if (d.length === 10) d = "1" + d; if (d.length === 11 && d[0] === "1") return "+" + d; return ""; }
-
-// ---- Card store (Upstash Redis REST) — pre-printed, phone-activated cards ----
-const RURL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const RTOK = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-async function redis(cmd) {
-  if (!RURL || !RTOK) throw new Error("Card store not configured.");
-  const r = await fetch(RURL, { method: "POST", headers: { Authorization: "Bearer " + RTOK, "Content-Type": "application/json" }, body: JSON.stringify(cmd) });
-  const d = await r.json();
-  if (d && d.error) throw new Error(d.error);
-  return d ? d.result : null;
-}
-const rGet = async (k) => { const v = await redis(["GET", k]); return v ? JSON.parse(v) : null; };
-const rSet = (k, v) => redis(["SET", k, JSON.stringify(v)]);
-// Random 16-digit Luhn-valid card number (leading 9, matching the derived ones).
-function randCardNumber() {
-  let base = "9";
-  for (let i = 0; i < 14; i++) base += Math.floor(Math.random() * 10);
-  let sum = 0, dbl = true;
-  for (let i = base.length - 1; i >= 0; i--) { let d = +base[i]; if (dbl) { d *= 2; if (d > 9) d -= 9; } sum += d; dbl = !dbl; }
-  return base + ((10 - (sum % 10)) % 10);
-}
 
 export default async function handler(req, res) {
   if (!IK) return res.status(200).json({ error: "Service not configured." });
@@ -249,9 +161,7 @@ export default async function handler(req, res) {
   if (!email) return res.status(200).json({ error: "No email on account." });
   const emLower = (email || "").toLowerCase();
   const isAdmin = adminList().includes(emLower);
-  const isStore = !isAdmin && storeList().includes(emLower);
-  const isOperator = isAdmin || isStore;            // can run store operations
-  const role = isAdmin ? "admin" : isStore ? "store" : "customer";
+  // isStore / role are finalized below, after the admin's store registry loads.
 
   try {
     // ---- Program context: existing accounts give us entity + program + operating acct ----
@@ -279,8 +189,14 @@ export default async function handler(req, res) {
       return c;
     }
 
-    // ---- Program config + per-customer reward flags ----
-    const { holder: cfgHolder, program } = await loadProgram(clerk, meUser);
+    // ---- Program config + store registry + per-customer reward flags ----
+    const { holder: cfgHolder, program, stores } = await loadProgram(clerk, meUser);
+    // Finalize role: a store is anyone in the admin's store registry (or legacy STORE_EMAILS env).
+    const isStore = !isAdmin && (!!stores[emLower] || storeList().includes(emLower));
+    const isOperator = isAdmin || isStore;
+    const role = isAdmin ? "admin" : isStore ? "store" : "customer";
+    // A store's checkout awards that store's own rate; otherwise the global default.
+    const effRewards = (opEmail) => { const s = stores[(opEmail || "").toLowerCase()]; return (s && s.rewardsPercent != null) ? s.rewardsPercent : program.rewardsPercent; };
     const myFlags = (meUser && meUser.privateMetadata && meUser.privateMetadata.shuk) || {};
     async function setMyFlag(patch) {
       try {
@@ -306,9 +222,14 @@ export default async function handler(req, res) {
     if (action === "bootstrap") {
       if (isOperator) {
         const cardAccts = all.filter(a => String(a.name || "").startsWith("Gift:"));
-        const cards = await Promise.all(cardAccts.map(async a => ({
-          id: a.id, email: a.name.slice(5), code: codeFor(a), cardNumber: cardNumber(a), balance: await balance(a.id),
-        })));
+        const ptsAccts = all.filter(a => String(a.name || "").startsWith("Points:"));
+        const ptsBalForEmail = async (em) => { const p = all.find(x => x.name === "Points:" + em); return p ? await balance(p.id) : 0; };
+        const cards = await Promise.all(cardAccts.map(async a => {
+          const em = a.name.slice(5);
+          const obj = { id: a.id, email: em, code: codeFor(a), cardNumber: cardNumber(a), balance: await balance(a.id) };
+          if (isAdmin) obj.points = await ptsBalForEmail(em);
+          return obj;
+        }));
         cards.sort((x, y) => y.balance - x.balance);
         // Per-customer transaction report, built from each gift card's ledger history.
         // On a card: a negative entry is a redemption (sale), a positive entry is a load.
@@ -317,9 +238,15 @@ export default async function handler(req, res) {
           return list.map(t => ({ email: a.name.slice(5), code: codeFor(a), amount: t.amount, when: t.when, at: t.at, who: t.amount < 0 ? "Sale" : "Load" }));
         }));
         const transactions = lists.flat().sort((x, y) => new Date(y.at || 0) - new Date(x.at || 0)).slice(0, 60);
-        const ptsAccts = all.filter(a => String(a.name || "").startsWith("Points:"));
         const pointsIssued = (await Promise.all(ptsAccts.map(a => balance(a.id)))).reduce((x, y) => x + y, 0);
-        return res.status(200).json({ role, isAdmin, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program });
+        if (isAdmin) {
+          const fundsHeld = cards.reduce((s, c) => s + (c.balance || 0), 0);
+          const storesArr = Object.keys(stores).map(k => ({ email: k, ...stores[k] })).sort((a, b) => a.name.localeCompare(b.name));
+          const stats = { fundsHeld, pointsIssued, activeCards: cards.filter(c => c.balance > 0).length, customerCount: cards.length, storeCount: storesArr.length };
+          return res.status(200).json({ role, isAdmin: true, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program, stores: storesArr, stats });
+        }
+        // Store sees its own effective rate.
+        return res.status(200).json({ role, isAdmin: false, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program: { ...program, rewardsPercent: effRewards(emLower) } });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -327,37 +254,11 @@ export default async function handler(req, res) {
       if (program.signupBonusPoints > 0 && !myFlags.signupBonus) {
         try { await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: program.signupBonusPoints }); await setMyFlag({ signupBonus: true }); } catch {}
       }
-      // Auto top-up: fire any due low-balance / scheduled reload before reporting balance.
-      let bal = await balance(card.id);
-      let autoReloaded = null;
-      try {
-        const auto = await runAutoReload(clerk, meUser, email, card.id, bal);
-        if (auto.ran) { bal = await balance(card.id); autoReloaded = { amount: auto.amount, settled: auto.settled }; }
-      } catch {}
       return res.status(200).json({
         role: "customer", email, name, cardId: card.id, code: codeFor(card), cardNumber: cardNumber(card),
-        balance: bal, points: await balance(pts.id), transactions: await txns(card.id, 12),
+        balance: await balance(card.id), points: await balance(pts.id), transactions: await txns(card.id, 12),
         program, firstLoadBonusUsed: !!myFlags.firstLoadBonus,
-        phone: myFlags.phone || null, ivrPinSet: !!myFlags.pinHash,
-        autoReload: autoCfg(meUser) || { enabled: false, mode: "low", thresholdCents: 0, amountCents: 0 },
-        autoReloaded,
       });
-    }
-
-    if (action === "setAutoReload") {
-      const enabled = !!body.enabled;
-      const mode = ["low", "weekly", "monthly"].includes(body.mode) ? body.mode : "low";
-      const amountCents = Math.min(200000, Math.max(0, Math.round(Number(body.amountCents) || 0)));
-      const thresholdCents = Math.min(200000, Math.max(0, Math.round(Number(body.thresholdCents) || 0)));
-      if (enabled && amountCents <= 0) return res.status(200).json({ error: "Enter a reload amount." });
-      if (enabled && mode === "low" && thresholdCents <= 0) return res.status(200).json({ error: "Enter a low-balance threshold." });
-      if (enabled) { const bank = await findBank(email); if (!bank) return res.status(200).json({ error: "Link a bank account first." }); }
-      const prev = autoCfg(meUser) || {};
-      let nextRun = 0;
-      if (enabled && mode !== "low") nextRun = (prev.nextRun && prev.mode === mode) ? prev.nextRun : nextRunFrom(mode, Date.now());
-      const cfg = { enabled, mode, amountCents, thresholdCents, nextRun, lastRun: prev.lastRun || 0 };
-      await setMyFlag({ autoReload: cfg });
-      return res.status(200).json({ ok: true, autoReload: cfg });
     }
 
     if (action === "load") {
@@ -371,19 +272,8 @@ export default async function handler(req, res) {
     }
 
     if (action === "bankStatus") {
-      const banks = await listBanks(email);
-      const b = banks[0] || null;
-      return res.status(200).json({ linked: banks.length > 0, last4: b ? b.last4 : null, banks });
-    }
-
-    if (action === "removeBank") {
-      // Archive a customer's linked external account. Only allow removing one of THEIR banks.
-      const id = String(body.bankId || "");
-      const mine = await listBanks(email);
-      if (!id || !mine.some(b => b.id === id)) return res.status(200).json({ error: "Bank account not found." });
-      try { await inc("/external_accounts/" + id, "PATCH", { status: "archived" }); }
-      catch { return res.status(200).json({ error: "Could not remove bank." }); }
-      return res.status(200).json({ ok: true, banks: await listBanks(email) });
+      const b = await findBank(email);
+      return res.status(200).json({ linked: !!b, last4: b ? String(b.account_number || "").slice(-4) : null });
     }
 
     if (action === "linkBank") {
@@ -421,28 +311,6 @@ export default async function handler(req, res) {
       }
       const bonus = settled ? await applyFirstLoadBonus(card, amount) : 0;
       return res.status(200).json({ ok: true, status: (tr && tr.status) || "pending", settled, bonus, balance: await balance(card.id) });
-    }
-
-    if (action === "setIvr") {
-      // Customer registers a phone number + 4-digit PIN for phone/SMS banking.
-      // PIN is stored hashed in the customer's private metadata; the phone -> email
-      // mapping is kept in a phoneIndex on the admin user so the IVR can resolve callers.
-      const pin = String(body.pin || "").replace(/\D/g, "");
-      const phone = e164(body.phone);
-      if (!phone) return res.status(200).json({ error: "Enter a valid US phone number." });
-      if (pin.length !== 4) return res.status(200).json({ error: "PIN must be 4 digits." });
-      await setMyFlag({ phone, pinHash: ivrPinHash(emLower, pin) });
-      try {
-        let holder = cfgHolder;
-        if (!holder) { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; }
-        if (holder) {
-          const idx = { ...((holder.privateMetadata && holder.privateMetadata.phoneIndex) || {}) };
-          for (const k of Object.keys(idx)) { if (idx[k] === emLower) delete idx[k]; }
-          idx[phone] = emLower;
-          await clerk.users.updateUserMetadata(holder.id, { privateMetadata: { ...(holder.privateMetadata || {}), phoneIndex: idx } });
-        }
-      } catch {}
-      return res.status(200).json({ ok: true, phone, ivrPinSet: true });
     }
 
     if (action === "charge") {
@@ -526,7 +394,7 @@ export default async function handler(req, res) {
         const cardAcct = all.find(a => a.id === cardId);
         const em = cardAcct && String(cardAcct.name || "").startsWith("Gift:") ? cardAcct.name.slice(5) : null;
         if (em) {
-          pointsAwarded = Math.floor(total * program.rewardsPercent);
+          pointsAwarded = Math.floor(total * effRewards(emLower));
           if (pointsAwarded > 0) {
             const pts = await ensurePoints(em);
             await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: pointsAwarded });
@@ -569,6 +437,29 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, program: merged });
     }
 
+    if (action === "setStore" || action === "removeStore") {
+      // Admin-only: manage the store registry (per-store rewards). Adding a store
+      // email here also grants it the store role (no redeploy needed).
+      if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
+      if (!clerk) return res.status(200).json({ error: "Sign-in not configured." });
+      let holder = cfgHolder;
+      if (!holder) { try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {} }
+      if (!holder) return res.status(200).json({ error: "Could not locate the platform admin account." });
+      const reg = { ...((holder.privateMetadata && holder.privateMetadata.stores) || {}) };
+      const sem = String(body.email || "").trim().toLowerCase();
+      if (!/.+@.+\..+/.test(sem)) return res.status(200).json({ error: "Enter a valid store email." });
+      if (adminList().includes(sem)) return res.status(200).json({ error: "That email is the platform admin." });
+      if (action === "removeStore") { delete reg[sem]; }
+      else { reg[sem] = cleanStore({ ...(reg[sem] || {}), ...(body.store || {}) }, sem); }
+      try {
+        await clerk.users.updateUserMetadata(holder.id, { privateMetadata: { ...(holder.privateMetadata || {}), stores: reg } });
+      } catch (e) {
+        return res.status(200).json({ error: "Could not save store: " + String((e && e.message) || e).slice(0, 120) });
+      }
+      const out = Object.keys(reg).map(k => ({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
+      return res.status(200).json({ ok: true, stores: out });
+    }
+
     if (action === "customerSnapshot") {
       // Operator-only: returns the customer-facing view for one card (for the preview).
       if (!isOperator) return res.status(200).json({ error: "Store access only." });
@@ -577,34 +468,6 @@ export default async function handler(req, res) {
       const em = acct.name.slice(5);
       const pts = await ensurePoints(em);
       return res.status(200).json({ email: em, code: codeFor(acct), cardNumber: cardNumber(acct), balance: await balance(acct.id), points: await balance(pts.id), transactions: await txns(acct.id, 12) });
-    }
-
-    if (action === "generateCards") {
-      if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
-      if (!RURL || !RTOK) return res.status(200).json({ error: "Card store not configured. Connect Upstash and set UPSTASH_REDIS_REST_URL / _TOKEN in Vercel." });
-      const count = Math.min(Math.max(parseInt(body.count, 10) || 0, 1), 200);
-      const made = [];
-      for (let i = 0; i < count; i++) {
-        let num = "";
-        for (let t = 0; t < 6; t++) { num = randCardNumber(); if (!(await rGet("card:" + num))) break; }
-        await rSet("card:" + num, { status: "unclaimed", createdAt: Date.now() });
-        await redis(["SADD", "cards:all", num]);
-        made.push(num);
-      }
-      return res.status(200).json({ ok: true, count: made.length, cards: made });
-    }
-
-    if (action === "listCards") {
-      if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
-      if (!RURL || !RTOK) return res.status(200).json({ error: "Card store not configured." });
-      const nums = (await redis(["SMEMBERS", "cards:all"])) || [];
-      const cards = [];
-      for (const n of nums) {
-        const rec = (await rGet("card:" + n)) || {};
-        cards.push({ cardNumber: n, status: rec.status || "unknown", phone: rec.phone || null, claimedAt: rec.claimedAt || null });
-      }
-      cards.sort((a, b) => (a.claimedAt || 0) - (b.claimedAt || 0));
-      return res.status(200).json({ ok: true, cards });
     }
 
     return res.status(200).json({ error: "Unknown action." });
