@@ -301,6 +301,12 @@ export default async function handler(req, res) {
       }
       return c;
     }
+    // Look up a customer's gift card by its printed 16-digit number (store charge flow).
+    const findByCardNumber = (num) => {
+      const d = String(num || "").replace(/\D/g, "");
+      if (d.length < 8) return null;
+      return all.find(a => String(a.name || "").startsWith("Gift:") && cardNumber(a) === d) || null;
+    };
 
     // ---- Program config + store registry + per-customer reward flags ----
     const { holder: cfgHolder, program, stores } = await loadProgram(clerk, meUser);
@@ -385,20 +391,24 @@ export default async function handler(req, res) {
           return res.status(200).json({ role, isAdmin: true, email, name, cards, transactions: allTx.slice(0, 80), posConnected: !!DK, pointsIssued, program, stores: storesArr, stats });
         }
 
-        // Store: its own sales only, plus store-level stats, its rate, and its settlement.
+        // Store: its OWN sales only (no customer browsing, no full card list).
+        const myStore = stores[emLower] || { name: name || emLower, rewardsPercent: program.rewardsPercent, feePercent: 0, active: true };
+        const sRate = effRewards(emLower);
+        const myFeePct = Number(myStore.feePercent) || 0;
         const mySales = allTx.filter(t => t.amount < 0 && t.store === emLower);
         const myToday = mySales.filter(t => isToday(t.at));
-        const myStore = stores[emLower] || { name: name || emLower, rewardsPercent: program.rewardsPercent, feePercent: 0, active: true };
         const mySalesTotal = mySales.reduce((s, t) => s + Math.abs(t.amount), 0);
         const sAcct = all.find(a => a.name === "Store:" + emLower);
         const owed = sAcct ? await balance(sAcct.id) : 0;
+        // Mask the customer on the store's own sale rows; show fee + points per charge.
+        const myTx = mySales.slice(0, 80).map(t => { const amt = Math.abs(t.amount); return { amount: t.amount, when: t.when, at: t.at, card: "•••• " + (t.code || "····"), fee: Math.round(amt * myFeePct / 100), points: Math.floor((amt / 100) * sRate) }; });
         const stats = {
           salesCount: mySales.length, salesTotal: mySalesTotal,
           salesTodayCount: myToday.length, salesTodayTotal: myToday.reduce((s, t) => s + Math.abs(t.amount), 0),
-          activeCards: cards.filter(c => c.balance > 0).length,
-          owed, feesPaid: Math.round(mySalesTotal * (Number(myStore.feePercent) || 0) / 100),
+          owed, feesPaid: Math.round(mySalesTotal * myFeePct / 100),
+          pointsGiven: Math.floor((mySalesTotal / 100) * sRate),
         };
-        return res.status(200).json({ role, isAdmin: false, email, name, cards, transactions: mySales.slice(0, 80), posConnected: !!DK, program: { ...program, rewardsPercent: effRewards(emLower) }, store: { email: emLower, ...myStore, owed }, stats });
+        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: !!DK, program: { ...program, rewardsPercent: sRate }, store: { email: emLower, ...myStore, owed }, stats });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -574,9 +584,10 @@ export default async function handler(req, res) {
       // Amount-based redemption. The store rings up the order in its own POS; here we
       // just charge the gift card for the order total (no item detail needed).
       if (!isOperator) return res.status(200).json({ error: "Only a store can charge cards." });
-      const cardId = body.cardId;
+      let cardId = body.cardId;
+      if (!cardId && body.cardNumber) { const a = findByCardNumber(body.cardNumber); if (!a) return res.status(200).json({ error: "No card found with that number." }); cardId = a.id; }
       const amountCents = Math.round(Number(body.amount) || 0);
-      if (!cardId) return res.status(200).json({ error: "Pick a customer." });
+      if (!cardId) return res.status(200).json({ error: "Enter a card number." });
       if (amountCents <= 0) return res.status(200).json({ error: "Enter a sale amount." });
       const bal = await balance(cardId);
       if (amountCents > bal) return res.status(200).json({ error: "Card balance is only $" + (bal / 100).toFixed(2) + "." });
@@ -690,6 +701,16 @@ export default async function handler(req, res) {
       }
       const out = Object.keys(reg).map(k => ({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
       return res.status(200).json({ ok: true, stores: out });
+    }
+
+    if (action === "verifyCard") {
+      // Store flow: look up a card by its number and confirm it can cover a charge.
+      if (!isOperator) return res.status(200).json({ error: "Store access only." });
+      const acct = findByCardNumber(body.cardNumber);
+      if (!acct) return res.status(200).json({ ok: false, error: "No card found with that number." });
+      const bal = await balance(acct.id);
+      const need = Math.round(Number(body.amount) || 0);
+      return res.status(200).json({ ok: true, cardId: acct.id, last4: cardNumber(acct).slice(-4), balance: bal, sufficient: need > 0 ? bal >= need : null });
     }
 
     if (action === "customerSnapshot") {
