@@ -453,15 +453,22 @@ export default async function handler(req, res) {
             } catch {}
           }
         }
-        // Mask the customer on the store's own sale rows; show fee + points per charge.
-        const myTx = mySales.slice(0, 80).map(t => { const amt = Math.abs(t.amount); return { amount: t.amount, when: t.when, at: t.at, card: "•••• " + (t.code || "····"), fee: Math.round(amt * myFeePct / 100), points: Math.floor((amt / 100) * sRate) }; });
+        // Build the store's money ledger: sales earned (net of fee) + withdrawals out.
+        // Sales come from the attributed customer charges (gross/fee/net/points, masked card);
+        // withdrawals come from the store's own settlement-account debits.
+        const saleRows = mySales.map(t => { const amt = Math.abs(t.amount); const fee = Math.round(amt * myFeePct / 100); return { kind: "sale", amount: amt - fee, gross: amt, fee, points: Math.floor((amt / 100) * sRate), card: "•••• " + (t.code || "····"), when: t.when, at: t.at }; });
+        const sTx = sAcct ? await txns(sAcct.id, 60) : [];
+        const payoutRows = sTx.filter(t => t.amount < 0).map(t => ({ kind: "payout", amount: t.amount, when: t.when, at: t.at }));
+        const myTx = [...saleRows, ...payoutRows].sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)).slice(0, 100);
+        const paidOut = payoutRows.reduce((s, t) => s + Math.abs(t.amount), 0);
         const stats = {
           salesCount: mySales.length, salesTotal: mySalesTotal,
           salesTodayCount: myToday.length, salesTodayTotal: myToday.reduce((s, t) => s + Math.abs(t.amount), 0),
           owed, feesPaid: Math.round(mySalesTotal * myFeePct / 100),
-          pointsGiven: Math.floor((mySalesTotal / 100) * sRate), autoPaid,
+          pointsGiven: Math.floor((mySalesTotal / 100) * sRate), paidOut, autoPaid,
         };
-        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: !!DK, program: { ...program, rewardsPercent: sRate }, store: { email: emLower, ...myStore, owed, bank: storeBank ? { last4: String(storeBank.account_number || "").slice(-4) } : null, autoPay: ap }, stats });
+        const bankInfo = storeBank ? { last4: String(storeBank.account_number || "").slice(-4), name: (meUser.privateMetadata && meUser.privateMetadata.shuk && meUser.privateMetadata.shuk.payoutName) || "" } : null;
+        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: !!DK, program: { ...program, rewardsPercent: sRate }, store: { email: emLower, ...myStore, owed, bank: bankInfo, autoPay: ap }, stats });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -771,11 +778,14 @@ export default async function handler(req, res) {
       if (!isStore) return res.status(200).json({ error: "Store access only." });
       const routing = String(body.routingNumber || "").replace(/\D/g, "");
       const account = String(body.accountNumber || "").replace(/\D/g, "");
+      const holder = String(body.companyName || "").trim().slice(0, 80);
       const funding = body.funding === "savings" ? "savings" : "checking";
+      if (!holder) return res.status(200).json({ error: "Enter the account holder / company name." });
       if (routing.length !== 9) return res.status(200).json({ error: "Enter a valid 9-digit routing number." });
       if (account.length < 4) return res.status(200).json({ error: "Enter a valid account number." });
-      await inc("/external_accounts", "POST", { routing_number: routing, account_number: account, funding, description: "StoreBank:" + emLower });
-      return res.status(200).json({ ok: true, last4: account.slice(-4) });
+      await inc("/external_accounts", "POST", { routing_number: routing, account_number: account, funding, account_holder: "business", description: "StoreBank:" + emLower });
+      await setMyFlag({ payoutName: holder });
+      return res.status(200).json({ ok: true, last4: account.slice(-4), name: holder });
     }
 
     if (action === "storePayout") {
