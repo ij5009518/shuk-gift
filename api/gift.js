@@ -58,6 +58,18 @@ function cleanStore(s, email) {
     note: String(o.note == null ? "" : o.note).trim().slice(0, 120),
   };
 }
+// Store auto-payout config (stored in the store's own Clerk metadata under shuk.autoPay).
+function cleanStorePay(p) {
+  const o = p || {};
+  const num = (v, d) => { const n = Number(v); return isFinite(n) && n >= 0 ? Math.round(n) : d; };
+  return {
+    enabled: !!o.enabled,
+    mode: ["daily", "weekly", "threshold"].includes(o.mode) ? o.mode : "weekly",
+    thresholdCents: num(o.thresholdCents, 0),
+    nextRun: num(o.nextRun, 0),
+    lastRun: num(o.lastRun, 0),
+  };
+}
 async function loadProgram(clerk, knownUser) {
   let holder = null;
   if (knownUser && (knownUser.emailAddresses || []).some(e => (e.emailAddress || "").toLowerCase() === CONFIG_EMAIL)) holder = knownUser;
@@ -307,6 +319,28 @@ export default async function handler(req, res) {
       if (d.length < 8) return null;
       return all.find(a => String(a.name || "").startsWith("Gift:") && cardNumber(a) === d) || null;
     };
+    // A store's payout bank (its own linked External Account, tagged "StoreBank:<email>").
+    async function findStoreBank(em) {
+      try {
+        const d = await inc("/external_accounts?limit=100");
+        return (d.data || []).find(x => (x.description || "") === "StoreBank:" + em && (x.status === undefined || x.status === "active")) || null;
+      } catch { return null; }
+    }
+    // Pay a store out: ACH credit (positive amount pushes funds OUT) from its settlement
+    // account to its linked bank. Returns the cents actually paid.
+    async function storePush(storeEmail, amountCents) {
+      const sa = all.find(a => a.name === "Store:" + storeEmail);
+      if (!sa) return 0;
+      const bank = await findStoreBank(storeEmail);
+      if (!bank) return 0;
+      const bal = await balance(sa.id);
+      amountCents = Math.min(Math.round(amountCents), bal);
+      if (amountCents <= 0) return 0;
+      const tr = await inc("/ach_transfers", "POST", { account_id: sa.id, amount: amountCents, statement_descriptor: "Shuk payout", external_account_id: bank.id });
+      if (tr && tr.status === "pending_approval" && tr.id) { try { await inc("/ach_transfers/" + tr.id + "/approve", "POST"); } catch {} }
+      if (/sandbox/.test(IB) && tr && tr.id) { try { await inc("/simulations/ach_transfers/" + tr.id + "/settle", "POST"); } catch {} }
+      return amountCents;
+    }
 
     // ---- Program config + store registry + per-customer reward flags ----
     const { holder: cfgHolder, program, stores } = await loadProgram(clerk, meUser);
@@ -399,16 +433,35 @@ export default async function handler(req, res) {
         const myToday = mySales.filter(t => isToday(t.at));
         const mySalesTotal = mySales.reduce((s, t) => s + Math.abs(t.amount), 0);
         const sAcct = all.find(a => a.name === "Store:" + emLower);
-        const owed = sAcct ? await balance(sAcct.id) : 0;
+        let owed = sAcct ? await balance(sAcct.id) : 0;
+        // Payout bank + auto-pay config (stored on the store's own Clerk user).
+        const storeBank = await findStoreBank(emLower);
+        const ap = cleanStorePay((meUser.privateMetadata && meUser.privateMetadata.shuk && meUser.privateMetadata.shuk.autoPay) || {});
+        // Fire a due auto-payout (runs whenever the store opens the app).
+        let autoPaid = 0;
+        if (ap.enabled && storeBank && owed > 0) {
+          const now = Date.now();
+          const due = ap.mode === "threshold" ? (ap.thresholdCents > 0 && owed >= ap.thresholdCents) : (!ap.nextRun || now >= ap.nextRun);
+          if (due) {
+            try {
+              autoPaid = await storePush(emLower, owed);
+              if (autoPaid > 0) {
+                const next = ap.mode === "daily" ? now + 864e5 : ap.mode === "weekly" ? now + 7 * 864e5 : 0;
+                await setMyFlag({ autoPay: { ...ap, lastRun: now, nextRun: next } });
+                owed = sAcct ? await balance(sAcct.id) : 0;
+              }
+            } catch {}
+          }
+        }
         // Mask the customer on the store's own sale rows; show fee + points per charge.
         const myTx = mySales.slice(0, 80).map(t => { const amt = Math.abs(t.amount); return { amount: t.amount, when: t.when, at: t.at, card: "•••• " + (t.code || "····"), fee: Math.round(amt * myFeePct / 100), points: Math.floor((amt / 100) * sRate) }; });
         const stats = {
           salesCount: mySales.length, salesTotal: mySalesTotal,
           salesTodayCount: myToday.length, salesTodayTotal: myToday.reduce((s, t) => s + Math.abs(t.amount), 0),
           owed, feesPaid: Math.round(mySalesTotal * myFeePct / 100),
-          pointsGiven: Math.floor((mySalesTotal / 100) * sRate),
+          pointsGiven: Math.floor((mySalesTotal / 100) * sRate), autoPaid,
         };
-        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: !!DK, program: { ...program, rewardsPercent: sRate }, store: { email: emLower, ...myStore, owed }, stats });
+        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: !!DK, program: { ...program, rewardsPercent: sRate }, store: { email: emLower, ...myStore, owed, bank: storeBank ? { last4: String(storeBank.account_number || "").slice(-4) } : null, autoPay: ap }, stats });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -711,6 +764,41 @@ export default async function handler(req, res) {
       const bal = await balance(acct.id);
       const need = Math.round(Number(body.amount) || 0);
       return res.status(200).json({ ok: true, cardId: acct.id, last4: cardNumber(acct).slice(-4), balance: bal, sufficient: need > 0 ? bal >= need : null });
+    }
+
+    if (action === "linkStoreBank") {
+      // Store adds the bank account it wants payouts sent to.
+      if (!isStore) return res.status(200).json({ error: "Store access only." });
+      const routing = String(body.routingNumber || "").replace(/\D/g, "");
+      const account = String(body.accountNumber || "").replace(/\D/g, "");
+      const funding = body.funding === "savings" ? "savings" : "checking";
+      if (routing.length !== 9) return res.status(200).json({ error: "Enter a valid 9-digit routing number." });
+      if (account.length < 4) return res.status(200).json({ error: "Enter a valid account number." });
+      await inc("/external_accounts", "POST", { routing_number: routing, account_number: account, funding, description: "StoreBank:" + emLower });
+      return res.status(200).json({ ok: true, last4: account.slice(-4) });
+    }
+
+    if (action === "storePayout") {
+      // Store withdraws its settlement balance to its linked bank by ACH.
+      if (!isStore) return res.status(200).json({ error: "Store access only." });
+      const sa = all.find(a => a.name === "Store:" + emLower);
+      const owed = sa ? await balance(sa.id) : 0;
+      const bank = await findStoreBank(emLower);
+      if (!bank) return res.status(200).json({ error: "Add a payout bank first." });
+      if (owed <= 0) return res.status(200).json({ error: "Nothing to withdraw." });
+      let amt = body.amount != null ? Math.round(Number(body.amount)) : owed;
+      if (amt <= 0) return res.status(200).json({ error: "Enter an amount." });
+      if (amt > owed) return res.status(200).json({ error: "You can withdraw up to $" + (owed / 100).toFixed(2) + "." });
+      const paid = await storePush(emLower, amt);
+      return res.status(200).json({ ok: true, paid: paid / 100, owed: await balance(sa.id) });
+    }
+
+    if (action === "setStorePayout") {
+      // Store enables/configures automatic payouts (saved on its own Clerk user).
+      if (!isStore) return res.status(200).json({ error: "Store access only." });
+      const cfg = cleanStorePay(body.autoPay);
+      await setMyFlag({ autoPay: cfg });
+      return res.status(200).json({ ok: true, autoPay: cfg });
     }
 
     if (action === "customerSnapshot") {
