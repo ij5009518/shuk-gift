@@ -53,6 +53,7 @@ function cleanStore(s, email) {
   return {
     name: nm,
     rewardsPercent: num(o.rewardsPercent, PROGRAM_DEFAULTS.rewardsPercent, 25),
+    feePercent: num(o.feePercent, 0, 100),   // platform's fee charged to this store per transaction
     active: o.active === false ? false : true,
     note: String(o.note == null ? "" : o.note).trim().slice(0, 120),
   };
@@ -271,9 +272,16 @@ export default async function handler(req, res) {
   try {
     // ---- Program context: existing accounts give us entity + program + operating acct ----
     const all = (await inc("/accounts?limit=100")).data || [];
-    const operating = all.find(a => { const n = String(a.name || ""); return !n.startsWith("Gift:") && !n.startsWith("Points:"); }) || all[0];
+    const operating = all.find(a => { const n = String(a.name || ""); return !n.startsWith("Gift:") && !n.startsWith("Points:") && !n.startsWith("Store:"); }) || all[0];
     if (!operating) return res.status(200).json({ error: "No operating account found." });
     const { entity_id, program_id, id: opId } = operating;
+
+    // Per-store settlement account: holds what the platform owes the store (sales net of fees).
+    async function ensureStoreAcct(em) {
+      let c = all.find(a => a.name === "Store:" + em);
+      if (!c) { c = await inc("/accounts", "POST", { name: "Store:" + em, entity_id, program_id }); all.push(c); }
+      return c;
+    }
 
     const findCard = (em) => all.find(a => a.name === "Gift:" + em);
     async function ensureCard(em) {
@@ -357,28 +365,40 @@ export default async function handler(req, res) {
           // Roll sales up by store.
           const byStore = {};
           for (const t of allTx) { if (t.amount < 0 && t.store) { const s = byStore[t.store] || (byStore[t.store] = { count: 0, total: 0 }); s.count++; s.total += Math.abs(t.amount); } }
-          const storesArr = Object.keys(stores).map(k => ({ email: k, ...stores[k], salesCount: (byStore[k] || {}).count || 0, salesTotal: (byStore[k] || {}).total || 0 }))
-            .sort((a, b) => (b.salesTotal - a.salesTotal) || a.name.localeCompare(b.name));
+          let storesArr = await Promise.all(Object.keys(stores).map(async k => {
+            const sa = all.find(a => a.name === "Store:" + k);
+            const owed = sa ? await balance(sa.id) : 0;                // settlement owed to the store (net of fees), in our ledger
+            const salesTotal = (byStore[k] || {}).total || 0;
+            const feePercent = Number(stores[k].feePercent) || 0;
+            const feesCollected = Math.round(salesTotal * feePercent / 100); // platform fee revenue from this store
+            return { email: k, ...stores[k], salesCount: (byStore[k] || {}).count || 0, salesTotal, owed, feesCollected };
+          }));
+          storesArr.sort((a, b) => (b.salesTotal - a.salesTotal) || a.name.localeCompare(b.name));
           const sales = allTx.filter(t => t.amount < 0);
           const stats = {
             fundsHeld, pointsIssued, activeCards: cards.filter(c => c.balance > 0).length,
             customerCount: cards.length, storeCount: storesArr.length,
             salesCount: sales.length, salesTotal: sales.reduce((s, t) => s + Math.abs(t.amount), 0),
             salesTodayTotal: sales.filter(t => isToday(t.at)).reduce((s, t) => s + Math.abs(t.amount), 0),
+            feeRevenue: storesArr.reduce((s, x) => s + (x.feesCollected || 0), 0),
           };
           return res.status(200).json({ role, isAdmin: true, email, name, cards, transactions: allTx.slice(0, 80), posConnected: !!DK, pointsIssued, program, stores: storesArr, stats });
         }
 
-        // Store: its own sales only, plus store-level stats and its rate.
+        // Store: its own sales only, plus store-level stats, its rate, and its settlement.
         const mySales = allTx.filter(t => t.amount < 0 && t.store === emLower);
         const myToday = mySales.filter(t => isToday(t.at));
-        const myStore = stores[emLower] || { name: name || emLower, rewardsPercent: program.rewardsPercent, active: true };
+        const myStore = stores[emLower] || { name: name || emLower, rewardsPercent: program.rewardsPercent, feePercent: 0, active: true };
+        const mySalesTotal = mySales.reduce((s, t) => s + Math.abs(t.amount), 0);
+        const sAcct = all.find(a => a.name === "Store:" + emLower);
+        const owed = sAcct ? await balance(sAcct.id) : 0;
         const stats = {
-          salesCount: mySales.length, salesTotal: mySales.reduce((s, t) => s + Math.abs(t.amount), 0),
+          salesCount: mySales.length, salesTotal: mySalesTotal,
           salesTodayCount: myToday.length, salesTodayTotal: myToday.reduce((s, t) => s + Math.abs(t.amount), 0),
           activeCards: cards.filter(c => c.balance > 0).length,
+          owed, feesPaid: Math.round(mySalesTotal * (Number(myStore.feePercent) || 0) / 100),
         };
-        return res.status(200).json({ role, isAdmin: false, email, name, cards, transactions: mySales.slice(0, 80), posConnected: !!DK, program: { ...program, rewardsPercent: effRewards(emLower) }, store: { email: emLower, ...myStore }, stats });
+        return res.status(200).json({ role, isAdmin: false, email, name, cards, transactions: mySales.slice(0, 80), posConnected: !!DK, program: { ...program, rewardsPercent: effRewards(emLower) }, store: { email: emLower, ...myStore, owed }, stats });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -566,6 +586,22 @@ export default async function handler(req, res) {
       const t = await inc("/account_transfers", "POST", { account_id: cardId, destination_account_id: opId, amount: amountCents, description: saleTag() });
       if (t && t.status === "pending_approval" && t.id) { try { await inc("/account_transfers/" + t.id + "/approve", "POST"); } catch {} }
 
+      // 1b) Settle the store: move (total − platform fee) from operating into the store's
+      //     settlement account. The platform fee % stays in operating as revenue.
+      let feeCents = 0, netCents = amountCents;
+      try {
+        if (isStore && stores[emLower]) {
+          const feePct = Number(stores[emLower].feePercent) || 0;
+          feeCents = Math.round(amountCents * feePct / 100);
+          netCents = amountCents - feeCents;
+          if (netCents > 0) {
+            const sa = await ensureStoreAcct(emLower);
+            const st2 = await inc("/account_transfers", "POST", { account_id: opId, destination_account_id: sa.id, amount: netCents, description: "Settlement|" + emLower });
+            if (st2 && st2.status === "pending_approval" && st2.id) { try { await inc("/account_transfers/" + st2.id + "/approve", "POST"); } catch {} }
+          }
+        }
+      } catch (e) { /* settlement is best-effort; the sale itself already succeeded */ }
+
       // 2) Record the redemption total in the store's POS (total only, best effort)
       let posInvoice = null, posError = null;
       if (DK) {
@@ -598,7 +634,7 @@ export default async function handler(req, res) {
         }
       } catch {}
 
-      return res.status(200).json({ ok: true, balance: await balance(cardId), total, posInvoice, posError, pointsAwarded });
+      return res.status(200).json({ ok: true, balance: await balance(cardId), total, posInvoice, posError, pointsAwarded, fee: feeCents / 100, net: netCents / 100 });
     }
 
     if (action === "redeem") {
