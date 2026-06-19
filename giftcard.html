@@ -213,6 +213,7 @@
     if(u&&u.imageUrl) $("avatar").innerHTML='<img src="'+u.imageUrl+'">'; else $("avatar").textContent=(name||"·").slice(0,1).toUpperCase();
     $("rolePill").textContent = ME.role==="admin" ? "PLATFORM ADMIN" : ME.role==="store" ? "STORE" : "CUSTOMER";
     if(page==="program" && ME.role!=="admin") page="home";
+    if(ME.autoReloaded&&ME.autoReloaded.amount){ toast("Auto top-up: added "+fmt(ME.autoReloaded.amount)+" to your card."); }
     buildNav(); render();
   }
 
@@ -226,7 +227,7 @@
     if(ME.role==="customer"){
       items=[["home","My card",cardIc],["rewards","Rewards",'<path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>'],["activity","Activity",act],["settings","Account",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>']];
     } else if(ME.role==="admin"){
-      items=[["home","Overview",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["stores","Stores",shop],["customers","Customers",people],["activity","Transactions",act],["program","Settings",gear]];
+      items=[["home","Overview",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["stores","Stores",shop],["customers","Customers",people],["cards","Cards",cardIc],["activity","Transactions",act],["program","Settings",gear]];
     } else {
       items=[["home","Dashboard",'<path d="M3 11l9-7 9 7M5 10v10h14V10"/>'],["checkout","Charge",'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/>'],["customers","Cards",cardIc],["activity","Transactions",act]];
     }
@@ -237,7 +238,7 @@
   document.body.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g){ page=g.getAttribute("data-go"); buildNav(); render(); } });
 
   /* ---------- Render ---------- */
-  const titles={home:ME=>ME.role==="admin"?"Platform overview":ME.role==="store"?"Store dashboard":"My card",checkout:()=>"Charge a card",customers:ME=>ME.role==="admin"?"Customers":"Gift cards",stores:()=>"Stores",activity:ME=>ME.role!=="customer"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
+  const titles={home:ME=>ME.role==="admin"?"Platform overview":ME.role==="store"?"Store dashboard":"My card",checkout:()=>"Charge a card",customers:ME=>ME.role==="admin"?"Customers":"Gift cards",stores:()=>"Stores",cards:()=>"Pre-printed cards",activity:ME=>ME.role!=="customer"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
   function txLabel(t){
     const c=t.cat||"", pos=(t.amount||0)>0;
     if(c.indexOf("ach")>=0) return pos?"Bank transfer":"Bank withdrawal";
@@ -322,6 +323,9 @@
   /* ----- Customer: Account settings ----- */
   function renderSettings(s){
     const line=(k,v)=>'<div class="row"><div><div class="dt">'+k+'</div><div class="nm">'+v+'</div></div></div>';
+    const ar=ME.autoReload||{enabled:false,mode:"low",thresholdCents:0,amountCents:0};
+    const arSummary=ar.enabled?(ar.mode==="low"?("On · reload "+fmt(ar.amountCents)+" when below "+fmt(ar.thresholdCents)):("On · reload "+fmt(ar.amountCents)+" "+ar.mode)):"Off";
+    const phoneSummary=ME.ivrPinSet?("On · "+(ME.phone||"phone registered")):"Off";
     s.innerHTML=
       '<div class="grid2"><div class="block"><h3>Account</h3>'+
         line("Name",ME.name||"—")+line("Email",ME.email||"—")+
@@ -329,11 +333,75 @@
         '<div class="row" style="border:none"><div><div class="dt">Current balance</div><div class="nm">'+fmt(ME.balance)+' · '+(ME.points||0)+' pts</div></div></div>'+
         '<button class="btn sub" id="mgBtn" style="width:100%;margin-top:12px">Manage profile &amp; security</button>'+
         '<button class="btn sub" id="soBtn" style="width:100%;margin-top:8px">Sign out</button>'+
-      '</div><div class="block"><h3>Your card</h3>'+
-        '<div class="codebox" style="letter-spacing:2px;font-size:18px">'+fmtCard(ME.cardNumber)+'</div>'+
-        '<p class="note">Show this card number at the register to pay with your '+store()+' store credit. Store credit isn’t transferable and can’t be cashed out. You earn '+(prog().rewardsPercent||0)+'% back — redeem points for credit on the Rewards page.</p></div></div>';
+      '</div><div>'+
+        '<div class="block"><h3>Wallet — linked banks</h3><div id="walletList"><div class="empty">Loading…</div></div>'+
+          '<button class="btn sub" id="addBankBtn" style="width:100%;margin-top:10px">+ Link a bank account</button>'+
+          '<p class="note">Link one or more banks to load funds by ACH. Bank details are sent securely to our banking partner and aren’t stored in the app.</p></div>'+
+        '<div class="block" style="margin-top:18px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><h3 style="margin:0">Auto top-up</h3><span class="note" style="margin:0">'+arSummary+'</span></div><button class="btn sub" id="autoBtn" style="width:auto;padding:9px 14px;font-size:13px;white-space:nowrap">Manage</button></div>'+
+          '<p class="note">Automatically reload your card from a linked bank — either when the balance drops below a threshold, or on a weekly/monthly schedule.</p></div>'+
+        '<div class="block" style="margin-top:18px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><h3 style="margin:0">Phone &amp; text banking</h3><span class="note" style="margin:0">'+phoneSummary+'</span></div><button class="btn sub" id="phoneBtn" style="width:auto;padding:9px 14px;font-size:13px;white-space:nowrap">'+(ME.ivrPinSet?"Update":"Set up")+'</button></div>'+
+          '<p class="note">Register a phone number and a 4-digit PIN to check your balance, add money, and link a bank by calling or texting — no app needed.</p></div>'+
+        '<div class="block" style="margin-top:18px"><h3>Your card</h3>'+
+          '<div class="codebox" style="letter-spacing:2px;font-size:18px">'+fmtCard(ME.cardNumber)+'</div>'+
+          '<p class="note">Show this card number at the register to pay with your '+store()+' store credit. Store credit isn’t transferable and can’t be cashed out. You earn '+(prog().rewardsPercent||0)+'% back — redeem points for credit on the Rewards page.</p></div>'+
+      '</div></div>';
     $("mgBtn").addEventListener("click",()=>{ try{ if(window.Clerk&&Clerk.openUserProfile){ Clerk.openUserProfile(); } else { toast("Profile management isn’t available."); } }catch(e){ toast("Profile management isn’t available."); } });
     $("soBtn").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
+    $("addBankBtn").addEventListener("click",openLinkBank);
+    $("autoBtn").addEventListener("click",openAutoReload);
+    $("phoneBtn").addEventListener("click",openPhoneBanking);
+    drawWallet();
+  }
+  async function drawWallet(){
+    const wrap=$("walletList"); if(!wrap) return;
+    const st=await api("bankStatus");
+    const banks=(st&&st.banks)||[];
+    if(!banks.length){ wrap.innerHTML='<div class="empty">No banks linked yet.</div>'; return; }
+    wrap.innerHTML=banks.map(b=>'<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10M19 21V10M3 10l9-6 9 6M9 21v-6h6v6"/></svg></div><div><div class="nm">'+(b.funding==="savings"?"Savings":"Checking")+' •••• '+esc(b.last4||"")+'</div><div class="dt">Routing •••• '+esc(b.routingLast4||"")+'</div></div><button class="go removeBank" data-id="'+escAttr(b.id)+'" style="margin-left:auto;background:#fdecec;color:#b91c1c">Remove</button></div>').join("");
+    wrap.querySelectorAll(".removeBank").forEach(btn=>btn.addEventListener("click",async()=>{ btn.disabled=true; btn.innerHTML='<span class="spin"></span>'; const r=await api("removeBank",{bankId:btn.getAttribute("data-id")}); if(r&&r.ok){ toast("Bank removed."); drawWallet(); } else { toast(r&&r.error?r.error:"Could not remove bank."); btn.disabled=false; btn.textContent="Remove"; } }));
+  }
+  function openAutoReload(){
+    const ar=ME.autoReload||{enabled:false,mode:"low",thresholdCents:0,amountCents:0};
+    const seg=(m,l)=>'<button data-m="'+m+'"'+(ar.mode===m?' class="on"':'')+'>'+l+'</button>';
+    const {el,close}=sheet('<h3>Auto top-up</h3><p class="sub">Reload your card automatically from a linked bank.</p>'+
+      '<label style="display:flex;align-items:center;gap:9px;margin:2px 0 12px;font-size:13.5px;font-weight:650;cursor:pointer"><input type="checkbox" id="arOn" '+(ar.enabled?"checked":"")+' /> Enable auto top-up</label>'+
+      '<label class="flabel">When to reload</label><div class="seg" id="arMode" style="grid-template-columns:repeat(3,1fr)">'+seg("low","Low bal.")+seg("weekly","Weekly")+seg("monthly","Monthly")+'</div>'+
+      '<div id="arThWrap"><label class="flabel">Reload when balance falls below ($)</label><input class="fld" id="arTh" type="number" min="1" step="1" value="'+(ar.thresholdCents?(ar.thresholdCents/100):"")+'" placeholder="e.g. 20" /></div>'+
+      '<label class="flabel">Reload amount ($)</label><input class="fld" id="arAmt" type="number" min="1" step="1" value="'+(ar.amountCents?(ar.amountCents/100):"")+'" placeholder="e.g. 50" />'+
+      '<button class="btn pri" id="arSave">Save auto top-up</button><button class="btn sub" id="arCx" style="width:100%;margin-top:8px">Cancel</button>'+
+      '<p class="note">Requires a linked bank. We pull funds by ACH; transfers take 1–3 business days to settle. The scheduled check runs daily.</p>');
+    let mode=ar.mode||"low";
+    const syncTh=()=>{ el.querySelector("#arThWrap").style.display=mode==="low"?"block":"none"; };
+    el.querySelectorAll("#arMode button").forEach(b=>b.addEventListener("click",()=>{ mode=b.getAttribute("data-m"); el.querySelectorAll("#arMode button").forEach(x=>x.classList.toggle("on",x===b)); syncTh(); }));
+    syncTh();
+    el.querySelector("#arCx").addEventListener("click",close);
+    el.querySelector("#arSave").addEventListener("click",async()=>{
+      const enabled=el.querySelector("#arOn").checked;
+      const amountCents=Math.round((parseFloat(el.querySelector("#arAmt").value)||0)*100);
+      const thresholdCents=Math.round((parseFloat(el.querySelector("#arTh").value)||0)*100);
+      const g=el.querySelector("#arSave"); g.disabled=true; g.innerHTML='<span class="spin"></span>';
+      const r=await api("setAutoReload",{enabled,mode,amountCents,thresholdCents});
+      if(r&&r.ok){ ME.autoReload=r.autoReload; close(); toast(enabled?"Auto top-up saved.":"Auto top-up turned off."); render(); }
+      else { toast(r&&r.error?r.error:"Could not save."); g.disabled=false; g.textContent="Save auto top-up"; }
+    });
+  }
+  function openPhoneBanking(){
+    const {el,close}=sheet('<h3>Phone &amp; text banking</h3><p class="sub">Bank by calling or texting — check balance, add money, link a bank.</p>'+
+      '<label class="flabel">Mobile phone number</label><input class="fld" id="pbPhone" type="tel" inputmode="tel" value="'+escAttr(ME.phone||"")+'" placeholder="(555) 123-4567" />'+
+      '<label class="flabel">4-digit phone PIN</label><input class="fld" id="pbPin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" />'+
+      '<button class="btn pri" id="pbSave">'+(ME.ivrPinSet?"Update phone banking":"Enable phone banking")+'</button>'+
+      '<button class="btn sub" id="pbCx" style="width:100%;margin-top:8px">Cancel</button>'+
+      '<p class="note">Your PIN is stored securely (hashed) and is required when you call or text. US numbers only. Standard call/message rates may apply.</p>');
+    el.querySelector("#pbCx").addEventListener("click",close);
+    el.querySelector("#pbSave").addEventListener("click",async()=>{
+      const phone=(el.querySelector("#pbPhone").value||"").trim();
+      const pin=(el.querySelector("#pbPin").value||"").replace(/\D/g,"");
+      if(pin.length!==4){ toast("Enter a 4-digit PIN."); return; }
+      const g=el.querySelector("#pbSave"); g.disabled=true; g.innerHTML='<span class="spin"></span>';
+      const r=await api("setIvr",{phone,pin});
+      if(r&&r.ok){ ME.phone=r.phone; ME.ivrPinSet=true; close(); toast("Phone banking enabled."); render(); }
+      else { toast(r&&r.error?r.error:"Could not save."); g.disabled=false; g.textContent=ME.ivrPinSet?"Update phone banking":"Enable phone banking"; }
+    });
   }
 
   /* ----- Admin: platform console ----- */
@@ -342,6 +410,7 @@
     if(page==="preview" && PREVIEW){ renderPreview(s); return; }
     if(page==="stores"){ renderStores(s,stores); return; }
     if(page==="customers"){ renderCustomers(s,cards); return; }
+    if(page==="cards"){ renderCards(s); return; }
     if(page==="program"){ renderProgram(s); return; }
     if(page==="activity"){
       const opts='<option value="">All stores</option>'+stores.map(x=>'<option value="'+escAttr(x.email)+'"'+(x.email===txStoreFilter?" selected":"")+'>'+esc(x.name)+'</option>').join("");
@@ -401,6 +470,52 @@
     draw("");
     $("custSearch").addEventListener("input",e=>draw(e.target.value.trim().toLowerCase()));
     $("issueBtn2").addEventListener("click",openIssue);
+  }
+  /* ----- Admin: pre-printed, phone-activated cards ----- */
+  function csvDownload(rows,filename){
+    const csv=rows.map(r=>r.map(c=>{ const s=String(c==null?"":c); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(",")).join("\r\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }
+  let GENERATED=[];
+  function renderCards(s){
+    s.innerHTML=
+      '<div class="grid2" style="align-items:start"><div class="block"><h3>Generate cards</h3>'+
+        '<p class="note" style="margin:0 0 10px">Mint pre-printed card numbers. A blank card is activated entirely by phone — the customer calls, enters the number, sets a PIN, and links a bank. No app sign-in needed.</p>'+
+        '<label class="flabel">How many cards</label><input class="fld" id="gcCount" type="number" min="1" max="200" step="1" value="25" />'+
+        '<button class="btn pri" id="gcGo">Generate cards</button>'+
+        '<div id="gcOut"></div>'+
+      '</div><div class="block"><h3>All pre-printed cards</h3>'+
+        '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn sub" id="gcReload" style="width:auto;padding:8px 13px;font-size:13px">Refresh</button><button class="btn sub" id="gcExport" style="width:auto;padding:8px 13px;font-size:13px">Export CSV</button></div>'+
+        '<div id="gcList"><div class="empty">Loading…</div></div>'+
+      '</div></div>';
+    const loadList=async()=>{
+      const r=await api("listCards");
+      const wrap=$("gcList"); if(!wrap) return;
+      if(r&&r.error){ wrap.innerHTML='<div class="empty">'+esc(r.error)+'</div>'; return; }
+      const cards=(r&&r.cards)||[]; window._GCLIST=cards;
+      if(!cards.length){ wrap.innerHTML='<div class="empty">No pre-printed cards yet. Generate a batch on the left.</div>'; return; }
+      wrap.innerHTML='<table class="tbl"><thead><tr><th>Card number</th><th>Status</th><th>Phone</th></tr></thead><tbody>'+cards.map(c=>{
+        const on=c.status==="active"; const lbl=c.status==="unclaimed"?"Blank":(on?"Active":esc(c.status));
+        return '<tr><td class="tnum">'+fmtCard(c.cardNumber)+'</td><td><span class="pill2 '+(on?"on":"off")+'">'+lbl+'</span></td><td class="tnum" style="color:var(--muted)">'+(c.phone?esc(c.phone):"—")+'</td></tr>';
+      }).join("")+'</tbody></table>';
+    };
+    $("gcGo").addEventListener("click",async()=>{
+      const count=Math.max(1,Math.min(200,parseInt($("gcCount").value)||0));
+      const g=$("gcGo"); g.disabled=true; g.innerHTML='<span class="spin"></span>';
+      const r=await api("generateCards",{count});
+      g.disabled=false; g.textContent="Generate cards";
+      if(r&&r.ok){
+        GENERATED=r.cards||[];
+        toast("Generated "+r.count+" card"+(r.count===1?"":"s")+".");
+        $("gcOut").innerHTML='<div class="block" style="background:var(--okbg);border:none;margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-size:13px;color:var(--accent2)">'+r.count+' new cards</b><button class="go" id="gcDl" style="background:#fff">Download CSV</button></div><div style="max-height:180px;overflow:auto;font-variant-numeric:tabular-nums;font-size:13px;line-height:1.9">'+GENERATED.map(n=>fmtCard(n)).join("<br>")+'</div></div>';
+        $("gcDl").addEventListener("click",()=>csvDownload([["card_number"]].concat(GENERATED.map(n=>[n])),"shuk-cards-"+Date.now()+".csv"));
+        loadList();
+      } else { toast(r&&r.error?r.error:"Could not generate cards."); }
+    });
+    $("gcReload").addEventListener("click",loadList);
+    $("gcExport").addEventListener("click",()=>{ const cards=window._GCLIST||[]; if(!cards.length){ toast("No cards to export."); return; } csvDownload([["card_number","status","phone","claimed_at"]].concat(cards.map(c=>[c.cardNumber,c.status,c.phone||"",c.claimedAt?new Date(c.claimedAt).toISOString():""])),"shuk-cards-"+Date.now()+".csv"); });
+    loadList();
   }
   function openStore(ex){
     const editing=!!(ex&&ex.email);
