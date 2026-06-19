@@ -197,6 +197,10 @@ export default async function handler(req, res) {
     const role = isAdmin ? "admin" : isStore ? "store" : "customer";
     // A store's checkout awards that store's own rate; otherwise the global default.
     const effRewards = (opEmail) => { const s = stores[(opEmail || "").toLowerCase()]; return (s && s.rewardsPercent != null) ? s.rewardsPercent : program.rewardsPercent; };
+    // Sales are tagged in the ledger description as "SALE|<storeEmail>" so every
+    // redemption can be attributed back to the store that rang it up.
+    const saleTag = () => "SALE|" + (isStore ? emLower : "platform");
+    const resolveStore = (t) => { const m = /^SALE\|(.+)$/i.exec(t.desc || ""); if (!m) return {}; const se = m[1].toLowerCase(); return { store: se, storeName: (stores[se] && stores[se].name) || (se === "platform" ? "Platform" : se) }; };
     const myFlags = (meUser && meUser.privateMetadata && meUser.privateMetadata.shuk) || {};
     async function setMyFlag(patch) {
       try {
@@ -233,20 +237,43 @@ export default async function handler(req, res) {
         cards.sort((x, y) => y.balance - x.balance);
         // Per-customer transaction report, built from each gift card's ledger history.
         // On a card: a negative entry is a redemption (sale), a positive entry is a load.
+        // Sales carry a "SALE|<store>" tag so we can attribute them.
         const lists = await Promise.all(cardAccts.map(async a => {
+          const em = a.name.slice(5);
           const list = await txns(a.id, 25);
-          return list.map(t => ({ email: a.name.slice(5), code: codeFor(a), amount: t.amount, when: t.when, at: t.at, who: t.amount < 0 ? "Sale" : "Load" }));
+          return list.map(t => ({ email: em, code: codeFor(a), amount: t.amount, when: t.when, at: t.at, who: t.amount < 0 ? "Sale" : "Load", ...resolveStore(t) }));
         }));
-        const transactions = lists.flat().sort((x, y) => new Date(y.at || 0) - new Date(x.at || 0)).slice(0, 60);
+        const allTx = lists.flat().sort((x, y) => new Date(y.at || 0) - new Date(x.at || 0));
         const pointsIssued = (await Promise.all(ptsAccts.map(a => balance(a.id)))).reduce((x, y) => x + y, 0);
+        const isToday = (at) => { try { return new Date(at).toDateString() === new Date().toDateString(); } catch { return false; } };
+
         if (isAdmin) {
           const fundsHeld = cards.reduce((s, c) => s + (c.balance || 0), 0);
-          const storesArr = Object.keys(stores).map(k => ({ email: k, ...stores[k] })).sort((a, b) => a.name.localeCompare(b.name));
-          const stats = { fundsHeld, pointsIssued, activeCards: cards.filter(c => c.balance > 0).length, customerCount: cards.length, storeCount: storesArr.length };
-          return res.status(200).json({ role, isAdmin: true, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program, stores: storesArr, stats });
+          // Roll sales up by store.
+          const byStore = {};
+          for (const t of allTx) { if (t.amount < 0 && t.store) { const s = byStore[t.store] || (byStore[t.store] = { count: 0, total: 0 }); s.count++; s.total += Math.abs(t.amount); } }
+          const storesArr = Object.keys(stores).map(k => ({ email: k, ...stores[k], salesCount: (byStore[k] || {}).count || 0, salesTotal: (byStore[k] || {}).total || 0 }))
+            .sort((a, b) => (b.salesTotal - a.salesTotal) || a.name.localeCompare(b.name));
+          const sales = allTx.filter(t => t.amount < 0);
+          const stats = {
+            fundsHeld, pointsIssued, activeCards: cards.filter(c => c.balance > 0).length,
+            customerCount: cards.length, storeCount: storesArr.length,
+            salesCount: sales.length, salesTotal: sales.reduce((s, t) => s + Math.abs(t.amount), 0),
+            salesTodayTotal: sales.filter(t => isToday(t.at)).reduce((s, t) => s + Math.abs(t.amount), 0),
+          };
+          return res.status(200).json({ role, isAdmin: true, email, name, cards, transactions: allTx.slice(0, 80), posConnected: !!DK, pointsIssued, program, stores: storesArr, stats });
         }
-        // Store sees its own effective rate.
-        return res.status(200).json({ role, isAdmin: false, email, name, cards, transactions, posConnected: !!DK, pointsIssued, program: { ...program, rewardsPercent: effRewards(emLower) } });
+
+        // Store: its own sales only, plus store-level stats and its rate.
+        const mySales = allTx.filter(t => t.amount < 0 && t.store === emLower);
+        const myToday = mySales.filter(t => isToday(t.at));
+        const myStore = stores[emLower] || { name: name || emLower, rewardsPercent: program.rewardsPercent, active: true };
+        const stats = {
+          salesCount: mySales.length, salesTotal: mySales.reduce((s, t) => s + Math.abs(t.amount), 0),
+          salesTodayCount: myToday.length, salesTodayTotal: myToday.reduce((s, t) => s + Math.abs(t.amount), 0),
+          activeCards: cards.filter(c => c.balance > 0).length,
+        };
+        return res.status(200).json({ role, isAdmin: false, email, name, cards, transactions: mySales.slice(0, 80), posConnected: !!DK, program: { ...program, rewardsPercent: effRewards(emLower) }, store: { email: emLower, ...myStore }, stats });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -254,10 +281,14 @@ export default async function handler(req, res) {
       if (program.signupBonusPoints > 0 && !myFlags.signupBonus) {
         try { await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: program.signupBonusPoints }); await setMyFlag({ signupBonus: true }); } catch {}
       }
+      const ctx = (await txns(card.id, 50)).map(t => ({ ...t, ...resolveStore(t) }));
+      // Lifetime summary: loaded in (positive non-redemption), spent (sales).
+      const spent = ctx.filter(t => t.amount < 0 && /^SALE\|/i.test(t.desc || "")).reduce((s, t) => s + Math.abs(t.amount), 0);
+      const loaded = ctx.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
       return res.status(200).json({
         role: "customer", email, name, cardId: card.id, code: codeFor(card), cardNumber: cardNumber(card),
-        balance: await balance(card.id), points: await balance(pts.id), transactions: await txns(card.id, 12),
-        program, firstLoadBonusUsed: !!myFlags.firstLoadBonus,
+        balance: await balance(card.id), points: await balance(pts.id), transactions: ctx.slice(0, 15),
+        summary: { loaded, spent }, program, firstLoadBonusUsed: !!myFlags.firstLoadBonus,
       });
     }
 
@@ -322,7 +353,7 @@ export default async function handler(req, res) {
       const bal = await balance(cardId);
       if (amount > bal) return res.status(200).json({ error: "Card balance is only $" + (bal / 100).toFixed(2) + "." });
       const t = await inc("/account_transfers", "POST", {
-        account_id: cardId, destination_account_id: opId, amount, description: "Shuk purchase",
+        account_id: cardId, destination_account_id: opId, amount, description: saleTag(),
       });
       if (t && t.status === "pending_approval" && t.id) {
         try { await inc("/account_transfers/" + t.id + "/approve", "POST"); } catch {}
@@ -366,8 +397,8 @@ export default async function handler(req, res) {
       if (amountCents > bal) return res.status(200).json({ error: "Card balance is only $" + (bal / 100).toFixed(2) + "." });
       const total = amountCents / 100;
 
-      // 1) Deduct the gift balance in our ledger
-      const t = await inc("/account_transfers", "POST", { account_id: cardId, destination_account_id: opId, amount: amountCents, description: "Shuk Gift purchase" });
+      // 1) Deduct the gift balance in our ledger (tagged with the store)
+      const t = await inc("/account_transfers", "POST", { account_id: cardId, destination_account_id: opId, amount: amountCents, description: saleTag() });
       if (t && t.status === "pending_approval" && t.id) { try { await inc("/account_transfers/" + t.id + "/approve", "POST"); } catch {} }
 
       // 2) Record the redemption total in the store's POS (total only, best effort)
