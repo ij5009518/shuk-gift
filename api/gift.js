@@ -282,8 +282,8 @@ export default async function handler(req, res) {
         try { await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: program.signupBonusPoints }); await setMyFlag({ signupBonus: true }); } catch {}
       }
       const ctx = (await txns(card.id, 50)).map(t => ({ ...t, ...resolveStore(t) }));
-      // Lifetime summary: loaded in (positive non-redemption), spent (sales).
-      const spent = ctx.filter(t => t.amount < 0 && /^SALE\|/i.test(t.desc || "")).reduce((s, t) => s + Math.abs(t.amount), 0);
+      // Lifetime summary on the card: loaded in (any credit) vs spent (any debit/sale).
+      const spent = ctx.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
       const loaded = ctx.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
       return res.status(200).json({
         role: "customer", email, name, cardId: card.id, code: codeFor(card), cardNumber: cardNumber(card),
