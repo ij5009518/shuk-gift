@@ -255,7 +255,10 @@
     return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+label+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(pos?"pos":"neg")+'">'+(pos?"+":"−")+fmt(Math.abs(t.amount))+'</div></div>';
   }
   function storeSaleRow(t){
-    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#5d6b65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div><div><div class="nm">Sale · '+esc(t.card||"card")+'</div><div class="dt">'+(t.when||"")+' · fee '+fmt(t.fee||0)+' · '+(t.points||0)+' pts</div></div><div class="amt neg">−'+fmt(Math.abs(t.amount))+'</div></div>';
+    if(t.kind==="payout"){
+      return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#5d6b65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/><path d="M4 21h16"/></svg></div><div><div class="nm">Withdrawal to bank</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt neg">−'+fmt(Math.abs(t.amount))+'</div></div>';
+    }
+    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div><div><div class="nm">Sale · '+esc(t.card||"card")+'</div><div class="dt">'+(t.when||"")+' · '+fmt(t.gross||Math.abs(t.amount))+' sale · fee '+fmt(t.fee||0)+' · '+(t.points||0)+' pts</div></div><div class="amt pos">+'+fmt(Math.abs(t.amount))+'</div></div>';
   }
   function merchRow(t){
     const sale=(t.amount||0)<0;
@@ -572,7 +575,7 @@
       return;
     }
     if(page==="activity"){
-      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">My sales</h3><span class="note" style="margin:0">'+txns.length+' sale'+(txns.length===1?"":"s")+'</span></div><div class="list">'+(txns.length?txns.map(storeSaleRow).join(""):'<div class="empty">No sales yet. Charge a gift card to get started.</div>')+'</div></div>';
+      s.innerHTML='<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Transactions</h3><span class="note" style="margin:0">'+txns.length+' entr'+(txns.length===1?"y":"ies")+'</span></div><div class="list">'+(txns.length?txns.map(storeSaleRow).join(""):'<div class="empty">No activity yet. Charge a gift card to get started.</div>')+'</div></div>';
       return;
     }
     if(page==="customers"){
@@ -619,7 +622,7 @@
       '<div class="stat green"><div class="k">Total sales</div><div class="v">'+fmt(st.salesTotal||0)+'</div></div>'+
       '<div class="stat"><div class="k">Owed to you</div><div class="v">'+fmt(st.owed||0)+'</div></div></div>'+
       '<p class="note" style="margin:8px 2px 0">"Owed to you" is your sales minus the '+sfee+'% platform fee — settled to your account. Fees paid: '+fmt(st.feesPaid||0)+' · Points given to customers: '+(st.pointsGiven||0)+'.</p>'+
-      '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent sales</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(storeSaleRow).join(""):'<div class="empty">No sales yet. Use Charge to ring one up.</div>')+'</div></div>';
+      '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent activity</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(storeSaleRow).join(""):'<div class="empty">No activity yet. Use Charge to ring one up.</div>')+'</div></div>';
     var gc=$("goCharge"); if(gc) gc.addEventListener("click",()=>{ page="checkout"; buildNav(); render(); });
   }
 
@@ -632,7 +635,7 @@
         '<div class="row" style="border:none;padding-bottom:6px"><div><div class="dt">Available to withdraw</div><div class="nm" style="font-size:22px;color:var(--accent)">'+fmt(stats.owed||0)+'</div></div><button class="btn pri" id="drawBtn" style="width:auto;margin-left:auto;padding:10px 16px">Withdraw</button></div>'+
         '<h3 style="margin-top:8px">Payout bank (ACH)</h3>'+
         (bank
-          ? '<div class="row" style="border:none"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6M4 9v11h16V9M9 20v-6h6v6"/></svg></div><div><div class="nm">Bank account</div><div class="dt">•••• '+esc(bank.last4)+'</div></div><button class="btn sub" id="bankBtn" style="width:auto;margin-left:auto">Change</button></div>'
+          ? '<div class="row" style="border:none"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#0e9f6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6M4 9v11h16V9M9 20v-6h6v6"/></svg></div><div><div class="nm">'+esc(bank.name||"Bank account")+'</div><div class="dt">•••• '+esc(bank.last4)+'</div></div><button class="btn sub" id="bankBtn" style="width:auto;margin-left:auto">Change</button></div>'
           : '<button class="btn sub" id="bankBtn" style="width:100%">+ Add a payout bank</button>')+
         '<h3 style="margin-top:14px">Auto-pay</h3>'+
         '<div class="row" style="border:none"><div><div class="nm">'+apLabel+'</div><div class="dt">Automatically send your balance to your bank.</div></div><button class="btn sub" id="autoBtn" style="width:auto;margin-left:auto">Manage</button></div>'+
@@ -651,9 +654,9 @@
     $("soBtn").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
   }
   function openLinkStoreBank(){
-    const {el,close}=sheet('<h3>Payout bank</h3><p class="sub">Where should we send your payouts?</p><label class="flabel">Routing number</label><input class="fld" id="rt" inputmode="numeric" placeholder="9 digits"/><label class="flabel">Account number</label><input class="fld" id="an" inputmode="numeric" placeholder="Account number"/><label class="flabel">Account type</label><select class="fld" id="ft"><option value="checking">Checking</option><option value="savings">Savings</option></select><button class="btn pri" id="lk">Save bank</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button><p class="note">Your bank details are sent securely to our banking partner and aren’t stored in the app.</p>');
+    const {el,close}=sheet('<h3>Payout bank</h3><p class="sub">Where should we send your payouts?</p><label class="flabel">Account holder / company name</label><input class="fld" id="cn" placeholder="e.g. Shuk Midtown LLC"/><label class="flabel">Routing number</label><input class="fld" id="rt" inputmode="numeric" placeholder="9 digits"/><label class="flabel">Account number</label><input class="fld" id="an" inputmode="numeric" placeholder="Account number"/><label class="flabel">Account type</label><select class="fld" id="ft"><option value="checking">Checking</option><option value="savings">Savings</option></select><button class="btn pri" id="lk">Save bank</button><button class="btn sub" id="cx" style="width:100%;margin-top:8px">Cancel</button><p class="note">Your bank details are sent securely to our banking partner and aren’t stored in the app.</p>');
     el.querySelector("#cx").addEventListener("click",close);
-    el.querySelector("#lk").addEventListener("click",async()=>{ const routingNumber=(el.querySelector("#rt").value||"").trim(); const accountNumber=(el.querySelector("#an").value||"").trim(); const funding=el.querySelector("#ft").value; if(routingNumber.replace(/\D/g,"").length!==9){toast("Enter a valid 9-digit routing number.");return;} if(accountNumber.replace(/\D/g,"").length<4){toast("Enter a valid account number.");return;} const g=el.querySelector("#lk"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("linkStoreBank",{routingNumber,accountNumber,funding}); if(r&&r.ok){ close(); toast("Payout bank saved •••• "+(r.last4||"")); await refresh(); render(); } else { toast(r&&r.error?r.error:"Could not save bank."); g.disabled=false; g.textContent="Save bank"; } });
+    el.querySelector("#lk").addEventListener("click",async()=>{ const companyName=(el.querySelector("#cn").value||"").trim(); const routingNumber=(el.querySelector("#rt").value||"").trim(); const accountNumber=(el.querySelector("#an").value||"").trim(); const funding=el.querySelector("#ft").value; if(!companyName){toast("Enter the account holder / company name.");return;} if(routingNumber.replace(/\D/g,"").length!==9){toast("Enter a valid 9-digit routing number.");return;} if(accountNumber.replace(/\D/g,"").length<4){toast("Enter a valid account number.");return;} const g=el.querySelector("#lk"); g.disabled=true; g.innerHTML='<span class="spin"></span>'; const r=await api("linkStoreBank",{companyName,routingNumber,accountNumber,funding}); if(r&&r.ok){ close(); toast("Payout bank saved •••• "+(r.last4||"")); await refresh(); render(); } else { toast(r&&r.error?r.error:"Could not save bank."); g.disabled=false; g.textContent="Save bank"; } });
   }
   function openPayout(){
     const owed=(ME.stats&&ME.stats.owed)||0;
