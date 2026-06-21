@@ -53,13 +53,34 @@ function cleanStore(s, email) {
   const o = s || {};
   const num = (v, d, max) => { let n = Number(v); if (!isFinite(n) || n < 0) n = d; if (max != null && n > max) n = max; return n; };
   const nm = String(o.name == null ? "" : o.name).trim().slice(0, 60) || String(email || "").split("@")[0];
+  const p = o.pos || {};
   return {
     name: nm,
     rewardsPercent: num(o.rewardsPercent, PROGRAM_DEFAULTS.rewardsPercent, 25),
     feePercent: num(o.feePercent, 0, 100),   // platform's fee charged to this store per transaction
     active: o.active === false ? false : true,
     note: String(o.note == null ? "" : o.note).trim().slice(0, 120),
+    // Per-store POS connection (managed from the admin/store portal, not env).
+    // Pluggable across POS providers — each store picks the type it uses.
+    pos: {
+      provider: POS_PROVIDERS.includes(p.provider) ? p.provider : "decimal",
+      baseUrl: String(p.baseUrl == null ? "" : p.baseUrl).trim().slice(0, 160),
+      key: String(p.key == null ? "" : p.key).trim().slice(0, 300),
+      locationId: String(p.locationId == null ? "" : p.locationId).trim().slice(0, 120),
+    },
   };
+}
+// POS providers we can connect. "decimal" is fully wired; others store the
+// connection and are recorded once their connector is implemented.
+const POS_PROVIDERS = ["decimal", "square", "clover", "shopify", "custom"];
+const POS_LABELS = { decimal: "Decimal (poswithlogic)", square: "Square", clover: "Clover", shopify: "Shopify POS", custom: "Custom / Other (API key)" };
+const POS_LIVE = ["decimal"]; // providers whose sale-recording connector is implemented
+// Frontend-safe view of a store: never expose the raw POS key.
+function publicStore(s) {
+  const pos = s.pos || {};
+  const key = String(pos.key || "");
+  const { pos: _omit, ...rest } = s;
+  return { ...rest, posConnected: !!key, posProvider: pos.provider || "decimal", posBaseUrl: pos.baseUrl || "", posLocationId: pos.locationId || "", posKeyLast4: key ? key.slice(-4) : "", posLive: POS_LIVE.includes(pos.provider || "decimal") };
 }
 // Store auto-payout config (stored in the store's own Clerk metadata under shuk.autoPay).
 function cleanStorePay(p) {
@@ -252,6 +273,48 @@ async function pos(path, method = "GET", body) {
 const posList = (d) => Array.isArray(d) ? d : (d.results || d.data || d.items || d.records || []);
 async function posCustomerId() { try { const c = posList(await pos("/customers?take=1"))[0]; return c && (c.id ?? c.customerId); } catch { return null; } }
 
+// ---- Per-store POS connector (uses each store's own saved credentials) ----
+// A POS config is { provider, baseUrl, key, locationId }. Falls back to the env
+// connector when a store has not connected its own.
+function posCfgOrEnv(cfg) {
+  if (cfg && String(cfg.key || "")) return cfg;
+  return DK ? { provider: "decimal", baseUrl: DB, key: DK } : null;
+}
+async function posReq(cfg, path, method = "GET", body) {
+  const base = (cfg && cfg.baseUrl) || DB;
+  const r = await fetch(base + path, { method, headers: { "x-api-key": (cfg && cfg.key) || DK, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const text = await r.text(); let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  if (!r.ok) { const e = new Error((data && (data.title || data.detail)) || ("POS error " + r.status)); e.status = r.status; e.data = data; throw e; }
+  return data;
+}
+// Test a POS connection (provider-specific ping).
+async function posTest(cfg) {
+  const prov = (cfg && cfg.provider) || "decimal";
+  if (prov === "decimal") { const d = await posReq(cfg, "/products?take=1"); return { ok: true, total: d.total ?? null }; }
+  throw new Error("The " + (POS_LABELS[prov] || prov) + " connector isn't available yet — the connection is saved and we'll record sales once it's enabled.");
+}
+// Record a paid gift redemption in a store's POS. Decimal is fully wired; other
+// providers store the connection and report a pending-connector status.
+async function posRecordSale(cfg, totalDollars) {
+  const prov = (cfg && cfg.provider) || "decimal";
+  if (prov !== "decimal") return { posInvoice: null, posError: (POS_LABELS[prov] || prov) + " connector not available yet" };
+  try {
+    const c0 = posList(await posReq(cfg, "/customers?take=1"))[0];
+    const custId = c0 && (c0.id ?? c0.customerId);
+    if (!custId) throw new Error("No POS customer available.");
+    const now = new Date().toISOString();
+    const ext = "SG" + Date.now().toString().slice(-16);
+    await posReq(cfg, "/invoices", "POST", {
+      externalInvoiceId: ext, invoiceDate: now, orderMethod: "Pickup", taxAmount: 0, taxableAmount: 0, customerId: custId,
+      items: [{ productCode: "GIFT", quantity: 1, unitPrice: totalDollars, subtotal: totalDollars, isTaxable: false, discountAmount: 0, description: "Gift card redemption" }],
+      payments: [{ paymentMethod: "APICreditCard", amount: totalDollars, referenceNo: ext.slice(0, 15), dateTime: now, cardholderName: "Shuk Gift", authorizationCode: ext.slice(0, 10), maskedCreditCardNumber: "************GIFT" }],
+      memo: "Shuk Gift redemption",
+    });
+    return { posInvoice: ext, posError: null };
+  } catch (e) { return { posInvoice: null, posError: String((e && e.message) || e).slice(0, 140) }; }
+}
+
 export default async function handler(req, res) {
   if (!IK) return res.status(200).json({ error: "Service not configured." });
   const secret = process.env.CLERK_SECRET_KEY;
@@ -416,7 +479,7 @@ export default async function handler(req, res) {
             const salesTotal = (byStore[k] || {}).total || 0;
             const feePercent = Number(stores[k].feePercent) || 0;
             const feesCollected = Math.round(salesTotal * feePercent / 100); // platform fee revenue from this store
-            return { email: k, ...stores[k], salesCount: (byStore[k] || {}).count || 0, salesTotal, owed, feesCollected };
+            return publicStore({ email: k, ...stores[k], salesCount: (byStore[k] || {}).count || 0, salesTotal, owed, feesCollected });
           }));
           storesArr.sort((a, b) => (b.salesTotal - a.salesTotal) || a.name.localeCompare(b.name));
           const sales = allTx.filter(t => t.amount < 0);
@@ -474,7 +537,8 @@ export default async function handler(req, res) {
         };
         const bankInfo = storeBank ? { last4: String(storeBank.account_number || "").slice(-4), name: (meUser.privateMetadata && meUser.privateMetadata.shuk && meUser.privateMetadata.shuk.payoutName) || "" } : null;
         const termsAccepted = !!(meUser.privateMetadata && meUser.privateMetadata.shuk && meUser.privateMetadata.shuk.terms && meUser.privateMetadata.shuk.terms.version === TERMS_VERSION);
-        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: !!DK, program: { ...program, rewardsPercent: sRate }, store: { email: emLower, ...myStore, owed, bank: bankInfo, autoPay: ap }, stats, termsAccepted, termsVersion: TERMS_VERSION });
+        const storePub = publicStore({ email: emLower, ...myStore, owed, bank: bankInfo, autoPay: ap });
+        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: storePub.posConnected || !!DK, program: { ...program, rewardsPercent: sRate }, store: storePub, stats, termsAccepted, termsVersion: TERMS_VERSION });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -692,23 +756,11 @@ export default async function handler(req, res) {
         }
       } catch (e) { /* settlement is best-effort; the sale itself already succeeded */ }
 
-      // 2) Record the redemption total in the store's POS (total only, best effort)
+      // 2) Record the redemption total in THIS store's own connected POS (best effort).
       let posInvoice = null, posError = null;
-      if (DK) {
-        try {
-          const custId = await posCustomerId();
-          if (!custId) throw new Error("No POS customer available.");
-          const now = new Date().toISOString();
-          const ext = "SG" + Date.now().toString().slice(-16);
-          await pos("/invoices", "POST", {
-            externalInvoiceId: ext, invoiceDate: now, orderMethod: "Pickup", taxAmount: 0, taxableAmount: 0, customerId: custId,
-            items: [{ productCode: "GIFT", quantity: 1, unitPrice: total, subtotal: total, isTaxable: false, discountAmount: 0, description: "Gift card redemption" }],
-            payments: [{ paymentMethod: "APICreditCard", amount: total, referenceNo: ext.slice(0, 15), dateTime: now, cardholderName: "Shuk Gift", authorizationCode: ext.slice(0, 10), maskedCreditCardNumber: "************GIFT" }],
-            memo: "Shuk Gift redemption",
-          });
-          posInvoice = ext;
-        } catch (e) { posError = String((e && e.message) || e).slice(0, 140); }
-      }
+      const posCfg = posCfgOrEnv(isStore && stores[emLower] ? stores[emLower].pos : null);
+      if (posCfg) { const r = await posRecordSale(posCfg, total); posInvoice = r.posInvoice; posError = r.posError; }
+      else posError = "No POS connected";
 
       // 3) Award loyalty points to the customer (1 point per $1 spent)
       let pointsAwarded = 0;
@@ -781,8 +833,44 @@ export default async function handler(req, res) {
       } catch (e) {
         return res.status(200).json({ error: "Could not save store: " + String((e && e.message) || e).slice(0, 120) });
       }
-      const out = Object.keys(reg).map(k => ({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
+      const out = Object.keys(reg).map(k => publicStore({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
       return res.status(200).json({ ok: true, stores: out });
+    }
+
+    if (action === "setStorePos" || action === "removeStorePos" || action === "testStorePos") {
+      // Connect / test a store's POS. Admin can manage any store; a store its own.
+      if (!isOperator) return res.status(200).json({ error: "Store access only." });
+      const target = isAdmin ? String(body.email || "").trim().toLowerCase() : emLower;
+      if (!/.+@.+\..+/.test(target)) return res.status(200).json({ error: "Pick a store." });
+      if (!isAdmin && target !== emLower) return res.status(200).json({ error: "You can only manage your own POS." });
+
+      if (action === "testStorePos") {
+        const inPos = body.pos || {};
+        const stored = (stores[target] && stores[target].pos) || {};
+        const key = String(inPos.key || "").trim() || stored.key || "";
+        if (!key) return res.status(200).json({ ok: false, error: "Add an API key first." });
+        const cfg = cleanStore({ pos: { provider: inPos.provider || stored.provider, baseUrl: inPos.baseUrl || stored.baseUrl, key, locationId: inPos.locationId || stored.locationId } }, target).pos;
+        try { const r = await posTest(cfg); return res.status(200).json({ ok: true, total: r.total }); }
+        catch (e) { return res.status(200).json({ ok: false, error: String((e && e.message) || e).slice(0, 160) }); }
+      }
+
+      if (!clerk) return res.status(200).json({ error: "Sign-in not configured." });
+      let holder = cfgHolder;
+      if (!holder) { try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {} }
+      if (!holder) return res.status(200).json({ error: "Could not locate the platform admin account." });
+      const reg = { ...((holder.privateMetadata && holder.privateMetadata.stores) || {}) };
+      const existing = reg[target] || {};
+      if (action === "removeStorePos") {
+        reg[target] = cleanStore({ ...existing, pos: { provider: (existing.pos && existing.pos.provider) || "decimal", baseUrl: "", key: "", locationId: "" } }, target);
+      } else {
+        const inPos = body.pos || {};
+        const keptKey = String(inPos.key || "").trim() || (existing.pos && existing.pos.key) || "";
+        reg[target] = cleanStore({ ...existing, pos: { provider: inPos.provider, baseUrl: inPos.baseUrl, key: keptKey, locationId: inPos.locationId } }, target);
+      }
+      try { await clerk.users.updateUserMetadata(holder.id, { privateMetadata: { ...(holder.privateMetadata || {}), stores: reg } }); }
+      catch (e) { return res.status(200).json({ error: "Could not save: " + String((e && e.message) || e).slice(0, 120) }); }
+      const out = Object.keys(reg).map(k => publicStore({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
+      return res.status(200).json({ ok: true, stores: out, store: publicStore({ email: target, ...cleanStore(reg[target], target) }) });
     }
 
     if (action === "verifyCard") {
