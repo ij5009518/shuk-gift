@@ -16,6 +16,9 @@ function adminList() {
 // Store operator(s) — run a store: charge/issue cards, view transactions. No config.
 function storeList() { return emailList(process.env.STORE_EMAILS); }
 
+// Store agreement version — bump to re-prompt every store to accept updated terms.
+const TERMS_VERSION = "2026-06-19";
+
 // ---- Program configuration (admin-editable, stored in Clerk metadata) ----
 // The canonical store admin's Clerk user holds the program config so every
 // request (customer or merchant) reads the same settings.
@@ -468,7 +471,8 @@ export default async function handler(req, res) {
           pointsGiven: Math.floor((mySalesTotal / 100) * sRate), paidOut, autoPaid,
         };
         const bankInfo = storeBank ? { last4: String(storeBank.account_number || "").slice(-4), name: (meUser.privateMetadata && meUser.privateMetadata.shuk && meUser.privateMetadata.shuk.payoutName) || "" } : null;
-        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: !!DK, program: { ...program, rewardsPercent: sRate }, store: { email: emLower, ...myStore, owed, bank: bankInfo, autoPay: ap }, stats });
+        const termsAccepted = !!(meUser.privateMetadata && meUser.privateMetadata.shuk && meUser.privateMetadata.shuk.terms && meUser.privateMetadata.shuk.terms.version === TERMS_VERSION);
+        return res.status(200).json({ role, isAdmin: false, email, name, transactions: myTx, posConnected: !!DK, program: { ...program, rewardsPercent: sRate }, store: { email: emLower, ...myStore, owed, bank: bankInfo, autoPay: ap }, stats, termsAccepted, termsVersion: TERMS_VERSION });
       }
       const card = await ensureCard(email);
       const pts = await ensurePoints(email);
@@ -771,6 +775,13 @@ export default async function handler(req, res) {
       const bal = await balance(acct.id);
       const need = Math.round(Number(body.amount) || 0);
       return res.status(200).json({ ok: true, cardId: acct.id, last4: cardNumber(acct).slice(-4), balance: bal, sufficient: need > 0 ? bal >= need : null });
+    }
+
+    if (action === "acceptStoreTerms") {
+      // Store accepts the participation agreement (electronic acceptance, recorded).
+      if (!isStore) return res.status(200).json({ error: "Store access only." });
+      await setMyFlag({ terms: { version: TERMS_VERSION, acceptedAt: new Date().toISOString() } });
+      return res.status(200).json({ ok: true });
     }
 
     if (action === "linkStoreBank") {
