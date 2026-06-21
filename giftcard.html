@@ -600,6 +600,29 @@
     $("gcExport").addEventListener("click",()=>{ const cards=window._GCLIST||[]; if(!cards.length){ toast("No cards to export."); return; } csvDownload([["card_number","status","phone","claimed_at"]].concat(cards.map(c=>[c.cardNumber,c.status,c.phone||"",c.claimedAt?new Date(c.claimedAt).toISOString():""])),"shuk-cards-"+Date.now()+".csv"); });
     loadList();
   }
+  const POS_OPTS=[["decimal","Decimal (poswithlogic)"],["square","Square"],["clover","Clover"],["shopify","Shopify POS"],["custom","Custom / Other (API key)"]];
+  const posLabel=p=>{ const f=POS_OPTS.find(x=>x[0]===p); return f?f[1]:(p||"POS"); };
+  function openPos(store){
+    const cur=store||{};
+    const adminTarget = ME.role==="admin" && cur.email ? cur.email : null;
+    const {el,close}=sheet('<h3>Connect POS / terminal</h3><p class="sub">Connect '+(cur.name?esc(cur.name):"this store")+'’s point-of-sale so each redemption records there.</p>'+
+      '<label class="flabel">POS type</label><select class="fld" id="pvProv">'+POS_OPTS.map(p=>'<option value="'+p[0]+'"'+(cur.posProvider===p[0]?" selected":"")+'>'+p[1]+'</option>').join("")+'</select>'+
+      '<label class="flabel">API base URL (optional)</label><input class="fld" id="pvBase" value="'+escAttr(cur.posBaseUrl||"")+'" placeholder="e.g. https://api.poswithlogic.dev" />'+
+      '<label class="flabel">API key'+(cur.posConnected?(" — saved •••• "+esc(cur.posKeyLast4||"")+", leave blank to keep"):"")+'</label><input class="fld" id="pvKey" type="password" autocomplete="off" placeholder="Paste the store’s POS API key" />'+
+      '<label class="flabel">Location / merchant ID (optional)</label><input class="fld" id="pvLoc" value="'+escAttr(cur.posLocationId||"")+'" placeholder="If your POS needs it" />'+
+      '<div id="pvMsg" class="note" style="margin:2px 0 8px;min-height:14px"></div>'+
+      '<div style="display:flex;gap:8px"><button class="btn sub" id="pvTest" style="flex:1">Test connection</button><button class="btn pri" id="pvSave" style="flex:1">Save</button></div>'+
+      (cur.posConnected?'<button class="btn sub" id="pvDisc" style="width:100%;margin-top:8px;color:#b91c1c">Disconnect POS</button>':'')+
+      '<button class="btn sub" id="pvCancel" style="width:100%;margin-top:8px">Cancel</button>'+
+      '<p class="note">The API key is stored securely on the server and never shown again. Only "Decimal" records sales today; other types save the connection.</p>');
+    const posBody=()=>({ provider:el.querySelector("#pvProv").value, baseUrl:(el.querySelector("#pvBase").value||"").trim(), key:(el.querySelector("#pvKey").value||"").trim(), locationId:(el.querySelector("#pvLoc").value||"").trim() });
+    const args=()=>Object.assign({pos:posBody()}, adminTarget?{email:adminTarget}:{});
+    el.querySelector("#pvCancel").addEventListener("click",close);
+    el.querySelector("#pvTest").addEventListener("click",async()=>{ const b=el.querySelector("#pvTest"); b.disabled=true; b.innerHTML='<span class="spin"></span>'; const r=await api("testStorePos",args()); b.disabled=false; b.textContent="Test connection"; el.querySelector("#pvMsg").innerHTML = (r&&r.ok)?('<span style="color:var(--accent2);font-weight:700">Connected ✓'+(r.total!=null?(" · "+r.total+" products"):"")+'</span>'):('<span style="color:#b91c1c">'+esc(r&&r.error?r.error:"Connection failed")+'</span>'); });
+    el.querySelector("#pvSave").addEventListener("click",async()=>{ const b=el.querySelector("#pvSave"); b.disabled=true; b.innerHTML='<span class="spin"></span>'; const r=await api("setStorePos",args()); if(r&&r.ok){ if(r.stores) ME.stores=r.stores; close(); toast("POS connection saved."); await refresh(); render(); } else { toast(r&&r.error?r.error:"Could not save."); b.disabled=false; b.textContent="Save"; } });
+    const disc=el.querySelector("#pvDisc"); if(disc) disc.addEventListener("click",async()=>{ disc.disabled=true; const r=await api("removeStorePos", adminTarget?{email:adminTarget}:{}); if(r&&r.ok){ if(r.stores) ME.stores=r.stores; close(); toast("POS disconnected."); await refresh(); render(); } else { toast(r&&r.error?r.error:"Could not disconnect."); disc.disabled=false; } });
+  }
+
   function openStore(ex){
     const editing=!!(ex&&ex.email);
     const e=ex||{};
@@ -610,9 +633,11 @@
       '<label class="flabel">Transaction fee — % the platform charges this store</label><input class="fld" id="sFee" type="number" min="0" max="100" step="0.25" value="'+(e.feePercent!=null?e.feePercent:0)+'" />'+
       '<label class="flabel">Note (optional)</label><input class="fld" id="sNote" value="'+escAttr(e.note||"")+'" placeholder="Location, manager, etc." />'+
       '<label style="display:flex;align-items:center;gap:9px;margin:2px 0 14px;font-size:13.5px;font-weight:650;cursor:pointer"><input type="checkbox" id="sActive" '+(e.active===false?"":"checked")+' /> Active — can sign in and charge cards</label>'+
+      (editing?'<div class="row" style="border:none;padding:6px 0;margin-bottom:10px"><div><div class="dt">POS connection</div><div class="nm">'+(e.posConnected?(esc(posLabel(e.posProvider))+" · connected"):"Not connected")+'</div></div><button class="btn sub" type="button" id="sPos" style="width:auto;margin-left:auto">'+(e.posConnected?"Manage POS":"Connect POS")+'</button></div>':'')+
       '<button class="btn pri" id="sSave">'+(editing?"Save store":"Add store")+'</button>'+
       (editing?'<button class="btn sub" id="sRemove" style="width:100%;margin-top:8px;color:#b91c1c">Remove store</button>':'')+
       '<button class="btn sub" id="sCancel" style="width:100%;margin-top:8px">Cancel</button>');
+    var sp=el.querySelector("#sPos"); if(sp) sp.addEventListener("click",()=>{ close(); openPos(e); });
     el.querySelector("#sCancel").addEventListener("click",close);
     el.querySelector("#sSave").addEventListener("click",async()=>{
       const email=editing?e.email:(el.querySelector("#sEmail").value||"").trim().toLowerCase();
@@ -746,13 +771,15 @@
       '</div><div class="block"><h3>Account</h3>'+
         '<div class="row"><div><div class="dt">Store</div><div class="nm">'+esc(st.name||ME.name||"")+'</div></div></div>'+
         '<div class="row"><div><div class="dt">Login email</div><div class="nm">'+esc(ME.email||"")+'</div></div></div>'+
-        '<div class="row" style="border:none"><div><div class="dt">Rates</div><div class="nm">'+(st.rewardsPercent||0)+'% reward · '+(st.feePercent||0)+'% platform fee</div></div></div>'+
+        '<div class="row"><div><div class="dt">Rates</div><div class="nm">'+(st.rewardsPercent||0)+'% reward · '+(st.feePercent||0)+'% platform fee</div></div></div>'+
+        '<div class="row" style="border:none"><div><div class="dt">Point of sale</div><div class="nm">'+(st.posConnected?(esc(posLabel(st.posProvider))+" · connected"):"Not connected")+'</div></div><button class="btn sub" id="posBtn" style="width:auto;margin-left:auto">'+(st.posConnected?"Manage":"Connect")+'</button></div>'+
         '<button class="btn sub" id="mgBtn" style="width:100%;margin-top:12px">Manage profile &amp; security</button>'+
         '<button class="btn sub" id="soBtn" style="width:100%;margin-top:8px">Sign out</button>'+
       '</div></div>';
     $("drawBtn").addEventListener("click",openPayout);
     $("bankBtn").addEventListener("click",openLinkStoreBank);
     $("autoBtn").addEventListener("click",openStoreAutoPay);
+    { var pb=$("posBtn"); if(pb) pb.addEventListener("click",()=>openPos(Object.assign({email:ME.email,name:st.name||ME.name},st))); }
     $("mgBtn").addEventListener("click",()=>{ try{ if(window.Clerk&&Clerk.openUserProfile){ Clerk.openUserProfile(); } else { toast("Unavailable."); } }catch(e){ toast("Unavailable."); } });
     $("soBtn").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
   }
