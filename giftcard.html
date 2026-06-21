@@ -18,7 +18,8 @@
 
   /* Auth gate */
   .auth{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(120% 120% at 80% 0%,#15614a 0%,#0c3527 55%,#06231a 100%);padding:24px;z-index:100;}
-  .authcard{background:#fff;border-radius:20px;padding:34px 30px;width:100%;max-width:380px;box-shadow:0 30px 70px -30px rgba(0,0,0,.55);text-align:center;}
+  .authcard{background:#fff;border-radius:20px;padding:34px 30px;width:100%;max-width:420px;box-shadow:0 30px 70px -30px rgba(0,0,0,.55);text-align:center;}
+  #clerkSignIn{width:100%;} #clerkSignIn>*{width:100%;}
   .brand{display:inline-flex;align-items:center;gap:10px;font-weight:850;font-size:22px;letter-spacing:-.5px;}
   .mark{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#3fd39a);display:grid;place-items:center;color:#fff;font-weight:850;font-size:15px;}
   .auth p{color:var(--muted);font-size:14px;margin:10px 0 14px;}
@@ -201,7 +202,7 @@
       $("shell").style.display="flex";
     } else {
       $("shell").style.display="none"; $("auth").style.display="grid";
-      const c=$("clerkSignIn"); if(!c._m){ c._m=true; try{ Clerk.mountSignIn(c,{ afterSignInUrl:"/app", afterSignUpUrl:"/app", appearance:{ variables:{ colorPrimary:"#0e9f6e", borderRadius:"11px", fontFamily:"inherit" }, elements:{ headerTitle:{display:"none"}, headerSubtitle:{display:"none"}, card:{boxShadow:"none",border:"none",padding:"0"}, footerAction:{}, footer:{display:"none"} } } }); }catch(e){ try{ Clerk.mountSignIn(c); }catch(_){} } }
+      const c=$("clerkSignIn"); if(!c._m){ c._m=true; try{ Clerk.mountSignIn(c,{ afterSignInUrl:"/app", afterSignUpUrl:"/app", appearance:{ variables:{ colorPrimary:"#0e9f6e", borderRadius:"11px", fontFamily:"inherit", fontSize:"14px" }, elements:{ rootBox:{width:"100%"}, cardBox:{width:"100%",boxShadow:"none",border:"none"}, card:{boxShadow:"none",border:"none",padding:"0",width:"100%"}, headerTitle:{display:"none"}, headerSubtitle:{display:"none"}, header:{display:"none"}, footer:{display:"none"}, logoBox:{display:"none"} } } }); }catch(e){ try{ Clerk.mountSignIn(c); }catch(_){} } }
     }
   }
   $("signout").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
