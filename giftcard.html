@@ -99,6 +99,8 @@
   .srow{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--line);} .srow:last-child{border-bottom:none;}
   .srch{width:100%;padding:10px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;margin-bottom:6px;background:#fff;}
   .srch:focus{outline:none;border-color:var(--accent);}
+  .terms{max-height:48vh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:16px 18px;font-size:13px;line-height:1.6;color:var(--ink);background:#fff;}
+  .terms h4{font-size:13.5px;font-weight:850;margin:14px 0 4px;} .terms h4:first-child{margin-top:0;} .terms p{margin:0 0 8px;}
 
   .flabel{font-size:12.5px;font-weight:750;color:#3a463f;display:block;margin-top:8px;}
   .fld{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;margin:5px 0 12px;background:#fff;color:var(--ink);}
@@ -271,6 +273,7 @@
   function render(){
     $("pageTitle").textContent=(titles[page]||(()=>"Shuk Gift"))(ME);
     const s=$("scroll");
+    if(ME.role==="store" && !ME.termsAccepted){ $("pageTitle").textContent="Store agreement"; return renderStoreTerms(s); }
     if(ME.role==="admin") return renderAdmin(s);
     if(ME.role==="store") return renderMerchant(s);
     return renderCustomer(s);
@@ -624,6 +627,34 @@
       '<p class="note" style="margin:8px 2px 0">"Owed to you" is your sales minus the '+sfee+'% platform fee — settled to your account. Fees paid: '+fmt(st.feesPaid||0)+' · Points given to customers: '+(st.pointsGiven||0)+'.</p>'+
       '<div class="block" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">Recent activity</h3><button class="go" data-go="activity" style="background:var(--surface);color:var(--ink)">View all</button></div><div class="list">'+(txns.length?txns.slice(0,8).map(storeSaleRow).join(""):'<div class="empty">No activity yet. Use Charge to ring one up.</div>')+'</div></div>';
     var gc=$("goCharge"); if(gc) gc.addEventListener("click",()=>{ page="checkout"; buildNav(); render(); });
+  }
+
+  /* ----- Store: participation agreement (accepted at sign-up) ----- */
+  const STORE_TERMS = `
+<p><b>Version 2026-06-19 · Governed by the laws of the State of New York.</b> By clicking "I agree" you accept this Agreement electronically.</p>
+<h4>1. The Program</h4><p>Shuk Gift ("Platform") operates a closed-loop store-credit / gift program. The credit is redeemable only for goods and services at participating stores, is not transferable for value, and is not redeemable for cash except as required by law (Section 6). It is not a "payment instrument" under New York Banking Law §640(5) and is not intended to constitute money transmission.</p>
+<h4>2. Appointment as Agent of the Payee</h4><p>The Store appoints Platform as its limited agent to (a) issue, sell, and redeem closed-loop store credit redeemable at the Store, and (b) collect, hold, and settle the related funds on the Store's behalf. A customer's payment is satisfied upon redemption at a participating store; Platform holds the corresponding funds as the participating stores' collection and settlement agent.</p>
+<h4>3. Funds Handling & Safeguarding</h4><p>Customer-loaded balances are held in a segregated, for-benefit-of (FBO) account separate from Platform's operating funds. Platform will not use store-owed balances as working capital and maintains liquid funds sufficient to meet redemption and settlement. Platform may retain interest or yield on held balances and its transaction fee as compensation.</p>
+<h4>4. Fees, Rewards & Settlement</h4><p>Platform charges the Store a per-transaction fee (a percentage of each redemption) shown in the Store's settings; the fee is charged to the Store, not the cardholder. Platform sets the customer rewards rate. On each redemption Platform credits the Store's settlement balance with the amount net of the fee and remits it to the Store's bank by ACH (manual or auto-pay). The Store authorizes deduction of the fee from settlement.</p>
+<h4>5. Store Obligations</h4><p>The Store will honor valid credit at face value as payment, treat cardholders no less favorably than cash customers, not surcharge for paying with credit, accurately record redemptions, and comply with applicable law.</p>
+<h4>6. New York Consumer Protections (GBL §396-i)</h4><p>No activation, dormancy, or service fees are charged to cardholders. Balances do not expire; any future expiration will be no earlier than nine (9) years and clearly disclosed. A closed-loop balance under $5.00 will be redeemed for cash on the cardholder's request, and the Store agrees to honor such requests.</p>
+<h4>7. Unclaimed Property / Escheatment</h4><p>Unredeemed balances may become abandoned property under New York Abandoned Property Law §1315 after the dormancy period (currently five years). Platform administers reporting and remittance; the Store will reasonably cooperate.</p>
+<h4>8. Compliance & AML</h4><p>Each party will comply with applicable consumer-protection, gift-card, unclaimed-property, and anti-money-laundering laws, and the Store will cooperate to maintain the Program's agent-of-the-payee structure.</p>
+<h4>9. Term & Termination</h4><p>This Agreement begins on acceptance and continues until terminated by either party on 30 days' notice. On termination Platform settles the Store's outstanding balance net of fees and the parties cooperate to honor credit already issued. Sections 3, 4, 6, 7, 10 and 11 survive.</p>
+<h4>10. Disclaimers & Liability</h4><p>The Program is provided "as is." To the extent permitted by law, neither party is liable for indirect or consequential damages, and each party's liability is limited to amounts held or owed under the Program.</p>
+<h4>11. Governing Law; Amendment; Electronic Acceptance</h4><p>This Agreement is governed by New York law, with exclusive jurisdiction in New York courts. Platform may amend on notice; continued participation accepts amendments. The parties consent to electronic records and signatures under the federal E-SIGN Act and New York ESRA; clicking "I agree" is a binding acceptance recorded with the user, version, and timestamp.</p>`;
+  function renderStoreTerms(s){
+    s.innerHTML=
+      '<div class="block" style="max-width:780px">'+
+        '<h3 style="font-size:18px;margin-bottom:2px">Store Participation &amp; Agent-of-the-Payee Agreement</h3>'+
+        '<p class="note" style="margin-top:0">Please review and accept to start using your store account.</p>'+
+        '<div class="terms">'+STORE_TERMS+'</div>'+
+        '<label style="display:flex;align-items:flex-start;gap:9px;margin:14px 0;font-size:13.5px;font-weight:650;cursor:pointer"><input type="checkbox" id="tAgree" style="margin-top:3px"/> I have read and agree to the Store Participation &amp; Agent-of-the-Payee Agreement, and I am authorized to bind my business.</label>'+
+        '<button class="btn pri" id="tGo" disabled style="opacity:.5">Agree &amp; continue</button>'+
+      '</div>';
+    const cb=$("tAgree"), go=$("tGo");
+    cb.addEventListener("change",()=>{ go.disabled=!cb.checked; go.style.opacity=cb.checked?"1":".5"; });
+    go.addEventListener("click",async()=>{ if(!cb.checked) return; go.disabled=true; go.innerHTML='<span class="spin"></span>'; const r=await api("acceptStoreTerms"); if(r&&r.ok){ toast("Agreement accepted."); await refresh(); render(); } else { toast(r&&r.error?r.error:"Could not record acceptance."); go.disabled=false; go.textContent="Agree & continue"; } });
   }
 
   /* ----- Store: Account & payouts ----- */
