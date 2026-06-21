@@ -489,13 +489,26 @@ export default async function handler(req, res) {
         const auto = await runAutoReload(clerk, meUser, email, card.id, bal);
         if (auto.ran) { bal = await balance(card.id); autoReloaded = { amount: auto.amount, settled: auto.settled }; }
       } catch {}
-      const ctx = (await txns(card.id, 50)).map(t => ({ ...t, ...resolveStore(t) }));
+      const ctx = (await txns(card.id, 60)).map(t => ({ ...t, ...resolveStore(t) }));
       // Lifetime summary on the card: loaded in (any credit) vs spent (any debit/sale).
       const spent = ctx.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
       const loaded = ctx.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      // Points ledger: credits on the points account = earned, debits = redeemed.
+      const ptx = await txns(pts.id, 60);
+      const inMonth = (at) => { try { const d = new Date(at), n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth(); } catch { return false; } };
+      const inYear = (at) => { try { return new Date(at).getFullYear() === new Date().getFullYear(); } catch { return false; } };
+      const pointsTx = ptx.map(t => ({ amount: t.amount, when: t.when, at: t.at, kind: t.amount < 0 ? "redeemed" : "earned" }));
+      const earnedTx = pointsTx.filter(t => t.amount > 0), redeemedTx = pointsTx.filter(t => t.amount < 0);
+      const pointsSummary = {
+        earnedTotal: earnedTx.reduce((s, t) => s + t.amount, 0),
+        redeemedTotal: redeemedTx.reduce((s, t) => s + Math.abs(t.amount), 0),
+        earnedMonth: earnedTx.filter(t => inMonth(t.at)).reduce((s, t) => s + t.amount, 0),
+        earnedYear: earnedTx.filter(t => inYear(t.at)).reduce((s, t) => s + t.amount, 0),
+      };
       return res.status(200).json({
         role: "customer", email, name, cardId: card.id, code: codeFor(card), cardNumber: cardNumber(card),
-        balance: bal, points: await balance(pts.id), transactions: ctx.slice(0, 15),
+        balance: bal, points: await balance(pts.id), transactions: ctx.slice(0, 60),
+        pointsTx: pointsTx.slice(0, 60), pointsSummary,
         summary: { loaded, spent }, program, firstLoadBonusUsed: !!myFlags.firstLoadBonus,
         phone: myFlags.phone || null, ivrPinSet: !!myFlags.pinHash,
         autoReload: autoCfg(meUser) || { enabled: false, mode: "low", thresholdCents: 0, amountCents: 0 },
@@ -724,9 +737,12 @@ export default async function handler(req, res) {
       if (points > have) return res.status(200).json({ error: "You only have " + have + " points." });
       const card = await ensureCard(email);
       const creditCents = points; // 100 pts -> 100¢ -> $1.00
-      const t = await inc("/account_transfers", "POST", { account_id: pts.id, destination_account_id: opId, amount: points, description: "Points redeemed for credit" });
+      // Move points out (points acct -> operating), then credit the card as a tagged
+      // "Points redeemed" transfer so it shows correctly in activity (not "Added funds").
+      const t = await inc("/account_transfers", "POST", { account_id: pts.id, destination_account_id: opId, amount: points, description: "Points redeemed" });
       if (t && t.status === "pending_approval" && t.id) { try { await inc("/account_transfers/" + t.id + "/approve", "POST"); } catch {} }
-      await inc("/simulations/interest_payments", "POST", { account_id: card.id, amount: creditCents });
+      const c2 = await inc("/account_transfers", "POST", { account_id: opId, destination_account_id: card.id, amount: creditCents, description: "Points redeemed" });
+      if (c2 && c2.status === "pending_approval" && c2.id) { try { await inc("/account_transfers/" + c2.id + "/approve", "POST"); } catch {} }
       return res.status(200).json({ ok: true, points: await balance(pts.id), balance: await balance(card.id), credited: creditCents });
     }
 
