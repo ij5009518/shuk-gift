@@ -130,6 +130,7 @@
     <div class="brand"><span class="mark">S</span><span>Shuk Gift</span></div>
     <p>Your store credit, rewards and linked banks — all in one beautiful wallet.</p>
     <div class="apills"><span class="apill">⚡ Instant rewards</span><span class="apill">🔒 Bank-grade security</span><span class="apill">🎁 Welcome bonus</span></div>
+    <div style="font-weight:850;font-size:15px;margin:6px 0 12px">Sign in or create your account</div>
     <div id="clerkSignIn"></div>
   </div>
 </div>
@@ -200,7 +201,7 @@
       $("shell").style.display="flex";
     } else {
       $("shell").style.display="none"; $("auth").style.display="grid";
-      const c=$("clerkSignIn"); if(!c._m){ c._m=true; try{ Clerk.mountSignIn(c); }catch(e){} }
+      const c=$("clerkSignIn"); if(!c._m){ c._m=true; try{ Clerk.mountSignIn(c,{ afterSignInUrl:"/app", afterSignUpUrl:"/app", appearance:{ variables:{ colorPrimary:"#0e9f6e", borderRadius:"11px", fontFamily:"inherit" }, elements:{ headerTitle:{display:"none"}, headerSubtitle:{display:"none"}, card:{boxShadow:"none",border:"none",padding:"0"}, footerAction:{}, footer:{display:"none"} } } }); }catch(e){ try{ Clerk.mountSignIn(c); }catch(_){} } }
     }
   }
   $("signout").addEventListener("click",()=>{ if(window.Clerk) Clerk.signOut(); });
@@ -209,6 +210,7 @@
   async function refresh(){
     const d=await api("bootstrap");
     ME=d||{};
+    try{ const ps=await api("profileStatus"); ME.profileComplete=!!(ps&&ps.profileComplete); ME.phone=ps&&ps.phone; if(ps&&ps.name) ME.name=ps.name; }catch(e){ ME.profileComplete=true; }
     const u=window.Clerk&&Clerk.user;
     const name=ME.name||(u&&u.fullName)||(ME.email||"").split("@")[0];
     $("sideName").textContent=name; $("sideEmail").textContent=ME.email||"";
@@ -273,10 +275,34 @@
   function render(){
     $("pageTitle").textContent=(titles[page]||(()=>"Shuk Gift"))(ME);
     const s=$("scroll");
+    if(!ME.profileComplete){ $("pageTitle").textContent="Complete your profile"; return renderProfileGate(s); }
     if(ME.role==="store" && !ME.termsAccepted){ $("pageTitle").textContent="Store agreement"; return renderStoreTerms(s); }
     if(ME.role==="admin") return renderAdmin(s);
     if(ME.role==="store") return renderMerchant(s);
     return renderCustomer(s);
+  }
+
+  /* ----- Profile completion (name + phone, captured after sign-up) ----- */
+  function renderProfileGate(s){
+    const nm = (ME.name && !/@/.test(ME.name)) ? ME.name : "";
+    s.innerHTML='<div class="block" style="max-width:440px">'+
+      '<h3 style="font-size:18px;margin-bottom:2px">Complete your profile</h3>'+
+      '<p class="note" style="margin-top:0">Add your name and phone number to finish setting up your '+brand()+' account.</p>'+
+      '<label class="flabel">Full name</label><input class="fld" id="pfName" value="'+escAttr(nm)+'" placeholder="Your name" />'+
+      '<label class="flabel">Phone number</label><input class="fld" id="pfPhone" type="tel" inputmode="tel" value="'+escAttr(ME.phone||"")+'" placeholder="(555) 123-4567" />'+
+      '<button class="btn pri" id="pfGo" style="margin-top:6px">Continue</button>'+
+      '<p class="note">We use your phone for account security and optional phone &amp; text banking.</p></div>';
+    const go=$("pfGo");
+    const submit=async()=>{
+      const name=($("pfName").value||"").trim(); const phone=($("pfPhone").value||"").trim();
+      if(name.length<2){ toast("Enter your name."); return; }
+      if(phone.replace(/\D/g,"").length<10){ toast("Enter a valid phone number."); return; }
+      go.disabled=true; go.innerHTML='<span class="spin"></span>';
+      const r=await api("setProfile",{name,phone});
+      if(r&&r.ok){ await refresh(); render(); } else { toast(r&&r.error?r.error:"Could not save."); go.disabled=false; go.textContent="Continue"; }
+    };
+    go.addEventListener("click",submit);
+    $("pfPhone").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); submit(); } });
   }
 
   /* ----- Customer ----- */
