@@ -358,6 +358,8 @@ export default async function handler(req, res) {
     const saleTag = () => "SALE|" + (isStore ? emLower : "platform");
     const resolveStore = (t) => { const m = /^SALE\|(.+)$/i.exec(t.desc || ""); if (!m) return {}; const se = m[1].toLowerCase(); return { store: se, storeName: (stores[se] && stores[se].name) || (se === "platform" ? "Platform" : se) }; };
     const myFlags = (meUser && meUser.privateMetadata && meUser.privateMetadata.shuk) || {};
+    // Prefer the Clerk name, else the name captured at sign-up, else the email.
+    name = [meUser.firstName, meUser.lastName].filter(Boolean).join(" ") || meUser.username || myFlags.fullName || email;
     async function setMyFlag(patch) {
       try {
         const merged = { ...((meUser.privateMetadata && meUser.privateMetadata.shuk) || {}), ...patch };
@@ -775,6 +777,22 @@ export default async function handler(req, res) {
       const bal = await balance(acct.id);
       const need = Math.round(Number(body.amount) || 0);
       return res.status(200).json({ ok: true, cardId: acct.id, last4: cardNumber(acct).slice(-4), balance: bal, sufficient: need > 0 ? bal >= need : null });
+    }
+
+    if (action === "profileStatus") {
+      const realName = [meUser.firstName, meUser.lastName].filter(Boolean).join(" ") || meUser.username || myFlags.fullName || "";
+      const ph = myFlags.phone || "";
+      return res.status(200).json({ name: realName, phone: ph, profileComplete: !!(realName && ph) });
+    }
+
+    if (action === "setProfile") {
+      // Capture name + phone at sign-up (or to complete a profile later).
+      const nm = String(body.name || "").trim().slice(0, 80);
+      const ph = String(body.phone || "").replace(/[^\d+]/g, "").slice(0, 20);
+      if (nm.length < 2) return res.status(200).json({ error: "Enter your name." });
+      if (ph.replace(/\D/g, "").length < 10) return res.status(200).json({ error: "Enter a valid phone number." });
+      await setMyFlag({ fullName: nm, phone: ph });
+      return res.status(200).json({ ok: true });
     }
 
     if (action === "acceptStoreTerms") {
