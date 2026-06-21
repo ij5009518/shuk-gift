@@ -246,10 +246,10 @@
   /* ---------- Render ---------- */
   const titles={home:ME=>ME.role==="admin"?"Platform overview":ME.role==="store"?"Store dashboard":"My card",checkout:()=>"Charge a card",customers:ME=>ME.role==="admin"?"Customers":"Gift cards",stores:()=>"Stores",cards:()=>"Pre-printed cards",activity:ME=>ME.role!=="customer"?"Transactions":"Activity",preview:()=>"Customer view",rewards:()=>"Rewards",settings:()=>"Account",program:()=>"Program & rewards"};
   function txLabel(t){
-    const c=t.cat||"", pos=(t.amount||0)>0;
+    const c=t.cat||"", pos=(t.amount||0)>0, redeem=/redeem/i.test(t.desc||"");
     if(c.indexOf("ach")>=0) return pos?"Bank transfer":"Bank withdrawal";
-    if(c==="account_transfer_intention") return pos?"Credit":"Purchase";
-    if(c==="interest_payment") return /redeem/i.test(t.desc||"")?"Points redeemed":"Added funds";
+    if(c==="account_transfer_intention") return pos?(redeem?"Points redeemed":"Credit"):"Purchase";
+    if(c==="interest_payment") return redeem?"Points redeemed":"Added funds";
     return pos?"Added funds":"Purchase";
   }
   function actRow(t){
@@ -311,8 +311,13 @@
     const txns=ME.transactions||[];
     if(page==="activity"){
       const sum=ME.summary||{};
+      const months=[...new Set((txns||[]).map(t=>{ try{ const d=new Date(t.at); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }catch{ return ""; } }).filter(Boolean))];
+      const monthLabel=m=>{ const p=m.split("-"); try{ return new Date(p[0],p[1]-1,1).toLocaleString("en-US",{month:"long",year:"numeric"}); }catch{ return m; } };
       s.innerHTML='<div class="stats" style="margin-bottom:16px"><div class="stat green"><div class="k">Loaded in</div><div class="v">'+fmt(sum.loaded||0)+'</div></div><div class="stat"><div class="k">Spent</div><div class="v">'+fmt(sum.spent||0)+'</div></div><div class="stat green"><div class="k">Points</div><div class="v">'+(ME.points||0)+'</div></div></div>'+
-        '<div class="block"><h3>Activity</h3><div class="list">'+(txns.length?txns.map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
+        '<div class="block"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap"><h3 style="margin:0">Activity</h3>'+
+        (months.length?'<div style="display:flex;gap:8px;align-items:center"><select class="fld" id="stMonth" style="width:auto;margin:0;padding:8px 12px">'+months.map(m=>'<option value="'+m+'">'+monthLabel(m)+'</option>').join("")+'</select><button class="btn sub" id="stDl" style="width:auto;padding:8px 12px">Download statement</button></div>':'')+
+        '</div><div class="list">'+(txns.length?txns.map(actRow).join(""):'<div class="empty">No activity yet.</div>')+'</div></div>';
+      const dl=$("stDl"); if(dl) dl.addEventListener("click",()=>downloadStatement($("stMonth").value,monthLabel($("stMonth").value)));
       return;
     }
     if(page==="rewards"){ renderRewards(s); return; }
@@ -338,9 +343,28 @@
     $("payBtn").addEventListener("click",openPay);
   }
 
+  /* ----- Customer: statement download + points rows ----- */
+  function downloadStatement(month,label){
+    const rows=(ME.transactions||[]).filter(t=>{ try{ const d=new Date(t.at); return (d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"))===month; }catch{ return false; } });
+    if(!rows.length){ toast("No transactions that month."); return; }
+    const fullDate=at=>{ try{ return new Date(at).toLocaleDateString("en-US",{year:"numeric",month:"2-digit",day:"2-digit"}); }catch{ return ""; } };
+    const amt=t=>(t.amount<0?"-":"+")+(Math.abs(t.amount)/100).toFixed(2);
+    const head=["Date","Type","Store","Amount (USD)"];
+    const lines=[head].concat(rows.map(t=>[fullDate(t.at), txLabel(t), (t.amount<0&&t.storeName)?t.storeName:"", amt(t)]));
+    const csv=lines.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(",")).join("\r\n");
+    const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}); const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download=brand().replace(/\s+/g,"_")+"_statement_"+month+".csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast("Statement for "+(label||month)+" downloaded.");
+  }
+  function pointsRow(t){
+    const earned=(t.amount||0)>0, stroke=earned?"#0e9f6e":"#5d6b65";
+    const path=earned?'<path d="M12 5v14M5 12l7 7 7-7"/>':'<path d="M12 19V5M5 12l7-7 7 7"/>';
+    return '<div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg></div><div><div class="nm">'+(earned?"Earned":"Redeemed")+'</div><div class="dt">'+(t.when||"")+'</div></div><div class="amt '+(earned?"pos":"neg")+'">'+(earned?"+":"−")+Math.abs(t.amount)+' pts</div></div>';
+  }
+
   /* ----- Customer: Rewards / Redeem ----- */
   function renderRewards(s){
-    const pts=ME.points||0, p=prog(), minPts=p.redeemMinPoints||100;
+    const pts=ME.points||0, p=prog(), minPts=p.redeemMinPoints||100, psum=ME.pointsSummary||{}, ptx=ME.pointsTx||[];
     s.innerHTML=
       '<div class="grid2"><div>'+
         '<div class="gc" style="background:radial-gradient(130% 130% at 100% 0%,#2a6f4f 0%,#155a3f 45%,#0b3b2e 100%)"><div class="deco"></div><div class="r1"><span class="nm">Rewards</span><span class="tag">LOYALTY</span></div><div class="lbl">Points balance</div><div class="bal">'+pts+' <span style="font-size:18px;opacity:.8">pts</span></div><div class="foot"><span>WORTH '+fmt(pts)+'</span><span>100 PTS = $1.00</span></div></div>'+
@@ -350,7 +374,10 @@
         '<input class="fld" id="rpts" type="number" min="'+minPts+'" step="100" placeholder="e.g. 500" />'+
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 12px"><span class="note" style="margin:0">Store credit you’ll receive</span><span id="rval" style="font-weight:850;font-size:16px">$0.00</span></div>'+
         '<button class="btn pri" id="rgo">Redeem for store credit</button>'+
-        '<p class="note">Minimum '+minPts+' points ($'+(minPts/100).toFixed(2)+') per redemption.</p></div></div>';
+        '<p class="note">Minimum '+minPts+' points ($'+(minPts/100).toFixed(2)+') per redemption.</p></div></div>'+
+      '<div class="block" style="margin-top:18px"><h3>Points activity</h3>'+
+        '<div class="stats" style="margin-bottom:12px"><div class="stat green"><div class="k">Earned this month</div><div class="v">'+(psum.earnedMonth||0)+'</div></div><div class="stat green"><div class="k">Earned this year</div><div class="v">'+(psum.earnedYear||0)+'</div></div><div class="stat"><div class="k">Total redeemed</div><div class="v">'+(psum.redeemedTotal||0)+'</div></div></div>'+
+        '<div class="list">'+(ptx.length?ptx.map(pointsRow).join(""):'<div class="empty">No points activity yet. Earn points by paying with your card.</div>')+'</div></div>';
     const calc=()=>{ const v=Math.floor(parseFloat($("rpts").value)||0); $("rval").textContent=fmt(v>0?v:0); };
     s.querySelectorAll("#rq button").forEach(b=>b.addEventListener("click",()=>{ $("rpts").value=b.getAttribute("data-q"); s.querySelectorAll("#rq button").forEach(x=>x.classList.toggle("on",x===b)); calc(); }));
     $("rpts").addEventListener("input",calc);
