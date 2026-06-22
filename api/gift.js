@@ -1,6 +1,8 @@
 // Shuk Gift backend. Auth via Clerk session; balances/ledger held as real bank
 // accounts (one per customer) with the banking provider. No provider names exposed.
+// Config + store registry persisted in Postgres (see db.js); per-user flags in Clerk.
 import crypto from "crypto";
+import { dbReady, dbGetProgram, dbSaveProgram, dbListStores, dbSaveStore, dbDeleteStore, dbSeedIfEmpty } from "./db.js";
 const IB = process.env.INCREASE_BASE_URL || "https://sandbox.increase.com";
 const IK = process.env.INCREASE_API_KEY;
 
@@ -102,9 +104,26 @@ async function loadProgram(clerk, knownUser) {
   }
   const saved = (holder && holder.privateMetadata && holder.privateMetadata.program) || {};
   const savedStores = (holder && holder.privateMetadata && holder.privateMetadata.stores) || {};
-  const stores = {};
-  for (const k of Object.keys(savedStores)) { const em = k.toLowerCase(); stores[em] = cleanStore(savedStores[k], em); }
-  return { holder, program: cleanProgram({ ...PROGRAM_DEFAULTS, ...saved }), stores };
+  const clerkStores = {};
+  for (const k of Object.keys(savedStores)) { const em = k.toLowerCase(); clerkStores[em] = cleanStore(savedStores[k], em); }
+
+  // Prefer Postgres for config + the store registry (per-row writes, encrypted
+  // POS keys). Seed from Clerk on first use so the cutover is seamless; if the
+  // DB isn't configured yet, fall back to the Clerk metadata values.
+  if (dbReady()) {
+    try {
+      await dbSeedIfEmpty(cleanProgram({ ...PROGRAM_DEFAULTS, ...saved }), clerkStores);
+      const dbProg = await dbGetProgram();
+      const rawStores = await dbListStores();
+      const stores = {};
+      for (const k of Object.keys(rawStores)) { const em = k.toLowerCase(); stores[em] = cleanStore(rawStores[k], em); }
+      return { holder, program: cleanProgram({ ...PROGRAM_DEFAULTS, ...(dbProg || saved) }), stores, db: true };
+    } catch (e) {
+      // If the DB hiccups, degrade to Clerk rather than break the request.
+      console.error("DB loadProgram failed, using Clerk fallback:", (e && e.message) || e);
+    }
+  }
+  return { holder, program: cleanProgram({ ...PROGRAM_DEFAULTS, ...saved }), stores: clerkStores, db: false };
 }
 
 async function inc(path, method = "GET", body) {
@@ -409,7 +428,7 @@ export default async function handler(req, res) {
     }
 
     // ---- Program config + store registry + per-customer reward flags ----
-    const { holder: cfgHolder, program, stores } = await loadProgram(clerk, meUser);
+    const { holder: cfgHolder, program, stores, db: usingDb } = await loadProgram(clerk, meUser);
     // Finalize role: a store is anyone in the admin's store registry (or legacy STORE_EMAILS env).
     const isStore = !isAdmin && (!!stores[emLower] || storeList().includes(emLower));
     const isOperator = isAdmin || isStore;
@@ -801,11 +820,16 @@ export default async function handler(req, res) {
     if (action === "setProgram") {
       // Admin-only: save the program configuration (rates, bonuses, branding).
       if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
+      const merged = cleanProgram({ ...program, ...(body.program || {}) });
+      if (usingDb) {
+        try { await dbSaveProgram(merged); }
+        catch (e) { return res.status(200).json({ error: "Could not save settings: " + String((e && e.message) || e).slice(0, 120) }); }
+        return res.status(200).json({ ok: true, program: merged });
+      }
       if (!clerk) return res.status(200).json({ error: "Sign-in not configured." });
       let holder = cfgHolder;
       if (!holder) { try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {} }
       if (!holder) return res.status(200).json({ error: "Could not locate the store admin account." });
-      const merged = cleanProgram({ ...program, ...(body.program || {}) });
       try {
         await clerk.users.updateUserMetadata(holder.id, { privateMetadata: { ...(holder.privateMetadata || {}), program: merged } });
       } catch (e) {
@@ -818,14 +842,25 @@ export default async function handler(req, res) {
       // Admin-only: manage the store registry (per-store rewards). Adding a store
       // email here also grants it the store role (no redeploy needed).
       if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
+      const sem = String(body.email || "").trim().toLowerCase();
+      if (!/.+@.+\..+/.test(sem)) return res.status(200).json({ error: "Enter a valid store email." });
+      if (adminList().includes(sem)) return res.status(200).json({ error: "That email is the platform admin." });
+      if (usingDb) {
+        try {
+          if (action === "removeStore") { await dbDeleteStore(sem); }
+          else { await dbSaveStore(sem, cleanStore({ ...(stores[sem] || {}), ...(body.store || {}) }, sem)); }
+        } catch (e) {
+          return res.status(200).json({ error: "Could not save store: " + String((e && e.message) || e).slice(0, 120) });
+        }
+        const reg = await dbListStores();
+        const out = Object.keys(reg).map(k => publicStore({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
+        return res.status(200).json({ ok: true, stores: out });
+      }
       if (!clerk) return res.status(200).json({ error: "Sign-in not configured." });
       let holder = cfgHolder;
       if (!holder) { try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {} }
       if (!holder) return res.status(200).json({ error: "Could not locate the platform admin account." });
       const reg = { ...((holder.privateMetadata && holder.privateMetadata.stores) || {}) };
-      const sem = String(body.email || "").trim().toLowerCase();
-      if (!/.+@.+\..+/.test(sem)) return res.status(200).json({ error: "Enter a valid store email." });
-      if (adminList().includes(sem)) return res.status(200).json({ error: "That email is the platform admin." });
       if (action === "removeStore") { delete reg[sem]; }
       else { reg[sem] = cleanStore({ ...(reg[sem] || {}), ...(body.store || {}) }, sem); }
       try {
@@ -854,6 +889,22 @@ export default async function handler(req, res) {
         catch (e) { return res.status(200).json({ ok: false, error: String((e && e.message) || e).slice(0, 160) }); }
       }
 
+      if (usingDb) {
+        const existing = stores[target] || {};
+        let updated;
+        if (action === "removeStorePos") {
+          updated = cleanStore({ ...existing, pos: { provider: (existing.pos && existing.pos.provider) || "decimal", baseUrl: "", key: "", locationId: "" } }, target);
+        } else {
+          const inPos = body.pos || {};
+          const keptKey = String(inPos.key || "").trim() || (existing.pos && existing.pos.key) || "";
+          updated = cleanStore({ ...existing, pos: { provider: inPos.provider, baseUrl: inPos.baseUrl, key: keptKey, locationId: inPos.locationId } }, target);
+        }
+        try { await dbSaveStore(target, updated); }
+        catch (e) { return res.status(200).json({ error: "Could not save: " + String((e && e.message) || e).slice(0, 120) }); }
+        const reg = await dbListStores();
+        const out = Object.keys(reg).map(k => publicStore({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
+        return res.status(200).json({ ok: true, stores: out, store: publicStore({ email: target, ...cleanStore(reg[target] || updated, target) }) });
+      }
       if (!clerk) return res.status(200).json({ error: "Sign-in not configured." });
       let holder = cfgHolder;
       if (!holder) { try { const r = await clerk.users.getUserList({ emailAddress: [CONFIG_EMAIL] }); const arr = Array.isArray(r) ? r : (r.data || []); holder = arr[0] || null; } catch {} }
