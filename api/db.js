@@ -61,12 +61,12 @@ function ensureSchema() {
   if (!sql) return Promise.resolve();
   if (!_ready) {
     _ready = (async () => {
-      await sql`CREATE TABLE IF NOT EXISTS app_config (
+      await sql`CREATE TABLE IF NOT EXISTS shuk_config (
         key text PRIMARY KEY,
         value jsonb NOT NULL,
         updated_at timestamptz NOT NULL DEFAULT now()
       )`;
-      await sql`CREATE TABLE IF NOT EXISTS stores (
+      await sql`CREATE TABLE IF NOT EXISTS shuk_stores (
         email text PRIMARY KEY,
         name text NOT NULL DEFAULT '',
         rewards_percent numeric NOT NULL DEFAULT 0,
@@ -106,13 +106,13 @@ function rowToStore(r) {
 export async function dbGetProgram() {
   if (!sql) return null;
   await ensureSchema();
-  const rows = await sql`SELECT value FROM app_config WHERE key = 'program'`;
+  const rows = await sql`SELECT value FROM shuk_config WHERE key = 'program'`;
   return rows[0] ? rows[0].value : null;
 }
 export async function dbSaveProgram(program) {
   if (!sql) return;
   await ensureSchema();
-  await sql`INSERT INTO app_config (key, value, updated_at)
+  await sql`INSERT INTO shuk_config (key, value, updated_at)
     VALUES ('program', ${JSON.stringify(program)}::jsonb, now())
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
 }
@@ -121,7 +121,7 @@ export async function dbSaveProgram(program) {
 export async function dbListStores() {
   if (!sql) return {};
   await ensureSchema();
-  const rows = await sql`SELECT * FROM stores`;
+  const rows = await sql`SELECT * FROM shuk_stores`;
   const out = {};
   for (const r of rows) out[String(r.email).toLowerCase()] = rowToStore(r);
   return out;
@@ -129,7 +129,7 @@ export async function dbListStores() {
 export async function dbGetStore(email) {
   if (!sql) return null;
   await ensureSchema();
-  const rows = await sql`SELECT * FROM stores WHERE email = ${String(email).toLowerCase()}`;
+  const rows = await sql`SELECT * FROM shuk_stores WHERE email = ${String(email).toLowerCase()}`;
   return rows[0] ? rowToStore(rows[0]) : null;
 }
 // s is a cleanStore-shaped object: { name, rewardsPercent, feePercent, active, note, pos:{provider,baseUrl,key,locationId} }
@@ -138,7 +138,7 @@ export async function dbSaveStore(email, s) {
   await ensureSchema();
   const em = String(email).toLowerCase();
   const pos = s.pos || {};
-  await sql`INSERT INTO stores
+  await sql`INSERT INTO shuk_stores
       (email, name, rewards_percent, fee_percent, active, note, pos_provider, pos_base_url, pos_key_enc, pos_location_id, updated_at)
     VALUES (${em}, ${s.name || ""}, ${Number(s.rewardsPercent) || 0}, ${Number(s.feePercent) || 0},
             ${s.active !== false}, ${s.note || ""}, ${pos.provider || "decimal"}, ${pos.baseUrl || ""},
@@ -152,7 +152,7 @@ export async function dbSaveStore(email, s) {
 export async function dbDeleteStore(email) {
   if (!sql) return;
   await ensureSchema();
-  await sql`DELETE FROM stores WHERE email = ${String(email).toLowerCase()}`;
+  await sql`DELETE FROM shuk_stores WHERE email = ${String(email).toLowerCase()}`;
 }
 
 /* ---------------- one-time seed from Clerk ---------------- */
@@ -162,8 +162,8 @@ let _seeded = false;
 export async function dbSeedIfEmpty(clerkProgram, clerkStores) {
   if (!sql || _seeded) return;
   await ensureSchema();
-  const cfg = await sql`SELECT 1 FROM app_config WHERE key = 'program'`;
-  const cnt = await sql`SELECT count(*)::int AS n FROM stores`;
+  const cfg = await sql`SELECT 1 FROM shuk_config WHERE key = 'program'`;
+  const cnt = await sql`SELECT count(*)::int AS n FROM shuk_stores`;
   const storesEmpty = (cnt[0] ? cnt[0].n : 0) === 0;
   if (cfg.length === 0 && clerkProgram) await dbSaveProgram(clerkProgram);
   if (storesEmpty && clerkStores) {
