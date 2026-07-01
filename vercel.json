@@ -1,5 +1,8 @@
 {
   "rewrites": [
+    { "source": "/api/Transactions/cart/quote", "destination": "/api/gift?__reg=quote" },
+    { "source": "/api/Transactions/cart", "destination": "/api/gift?__reg=cart" },
+    { "source": "/api/Transactions/:id/Void", "destination": "/api/gift?__reg=void&__id=:id" },
     { "source": "/", "destination": "/giftcard.html" },
     { "source": "/app", "destination": "/giftcard.html" }
   ],

@@ -613,6 +613,12 @@
       '<div id="pvMsg" class="note" style="margin:2px 0 8px;min-height:14px"></div>'+
       '<div style="display:flex;gap:8px"><button class="btn sub" id="pvTest" style="flex:1">Test connection</button><button class="btn pri" id="pvSave" style="flex:1">Save</button></div>'+
       (cur.posConnected?'<button class="btn sub" id="pvDisc" style="width:100%;margin-top:8px;color:#b91c1c">Disconnect POS</button>':'')+
+      (ME.role==="admin"?('<div style="border-top:1px solid #ececec;margin-top:14px;padding-top:12px">'+
+        '<div class="dt" style="font-weight:700;margin-bottom:3px">Register integration (poswithlogic)</div>'+
+        '<p class="note" style="margin:0 0 8px">Give the register this endpoint and a key so it can charge Shuk Gift cards directly.</p>'+
+        '<label class="flabel">Endpoint URL</label><input class="fld" readonly value="'+escAttr((location.origin||"")+"/api/Transactions")+'" onclick="this.select()" style="margin-bottom:8px" />'+
+        '<div id="rkOut"></div>'+
+        '<button class="btn sub" id="rkGen" style="width:100%">Generate register API key</button></div>'):'')+
       '<button class="btn sub" id="pvCancel" style="width:100%;margin-top:8px">Cancel</button>'+
       '<p class="note">The API key is stored securely on the server and never shown again. Only "Decimal" records sales today; other types save the connection.</p>');
     const posBody=()=>({ provider:el.querySelector("#pvProv").value, baseUrl:(el.querySelector("#pvBase").value||"").trim(), key:(el.querySelector("#pvKey").value||"").trim(), locationId:(el.querySelector("#pvLoc").value||"").trim() });
@@ -621,6 +627,7 @@
     el.querySelector("#pvTest").addEventListener("click",async()=>{ const b=el.querySelector("#pvTest"); b.disabled=true; b.innerHTML='<span class="spin"></span>'; const r=await api("testStorePos",args()); b.disabled=false; b.textContent="Test connection"; el.querySelector("#pvMsg").innerHTML = (r&&r.ok)?('<span style="color:var(--accent2);font-weight:700">Connected ✓'+(r.total!=null?(" · "+r.total+" products"):"")+'</span>'):('<span style="color:#b91c1c">'+esc(r&&r.error?r.error:"Connection failed")+'</span>'); });
     el.querySelector("#pvSave").addEventListener("click",async()=>{ const b=el.querySelector("#pvSave"); b.disabled=true; b.innerHTML='<span class="spin"></span>'; const r=await api("setStorePos",args()); if(r&&r.ok){ if(r.stores) ME.stores=r.stores; close(); toast("POS connection saved."); await refresh(); render(); } else { toast(r&&r.error?r.error:"Could not save."); b.disabled=false; b.textContent="Save"; } });
     const disc=el.querySelector("#pvDisc"); if(disc) disc.addEventListener("click",async()=>{ disc.disabled=true; const r=await api("removeStorePos", adminTarget?{email:adminTarget}:{}); if(r&&r.ok){ if(r.stores) ME.stores=r.stores; close(); toast("POS disconnected."); await refresh(); render(); } else { toast(r&&r.error?r.error:"Could not disconnect."); disc.disabled=false; } });
+    const rk=el.querySelector("#rkGen"); if(rk) rk.addEventListener("click",async()=>{ rk.disabled=true; rk.innerHTML='<span class="spin"></span>'; const r=await api("genRegKey",{email:cur.email}); rk.disabled=false; rk.textContent="Generate register API key"; if(r&&r.ok){ el.querySelector("#rkOut").innerHTML='<div class="note" style="margin-bottom:6px;color:#b45309"><b>Copy this key now — it won’t be shown again.</b></div><input class="fld" readonly value="'+escAttr(r.key)+'" onclick="this.select()" style="margin-bottom:10px" />'; } else toast(r&&r.error?r.error:"Could not generate key."); });
   }
 
   function openStore(ex){
