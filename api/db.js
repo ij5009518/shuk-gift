@@ -77,7 +77,31 @@ function ensureSchema() {
         pos_base_url text NOT NULL DEFAULT '',
         pos_key_enc text NOT NULL DEFAULT '',
         pos_location_id text NOT NULL DEFAULT '',
+        reg_key_hash text NOT NULL DEFAULT '',
         updated_at timestamptz NOT NULL DEFAULT now()
+      )`;
+      // In case shuk_stores already existed without the register-key column.
+      await sql`ALTER TABLE shuk_stores ADD COLUMN IF NOT EXISTS reg_key_hash text NOT NULL DEFAULT ''`;
+      // Physical card number -> the customer's gift account (for register charges).
+      await sql`CREATE TABLE IF NOT EXISTS shuk_cards (
+        card_number text PRIMARY KEY,
+        email text NOT NULL DEFAULT '',
+        account_id text NOT NULL DEFAULT '',
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`;
+      // Register transaction log so a charge can be Voided by its integer id.
+      await sql`CREATE TABLE IF NOT EXISTS shuk_pos_txns (
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        store_email text NOT NULL DEFAULT '',
+        card_number text NOT NULL DEFAULT '',
+        account_id text NOT NULL DEFAULT '',
+        amount_cents integer NOT NULL DEFAULT 0,
+        fee_cents integer NOT NULL DEFAULT 0,
+        points integer NOT NULL DEFAULT 0,
+        sale_id text NOT NULL DEFAULT '',
+        register text NOT NULL DEFAULT '',
+        status text NOT NULL DEFAULT 'approved',
+        created_at timestamptz NOT NULL DEFAULT now()
       )`;
     })().catch((e) => { _ready = null; throw e; });
   }
@@ -170,4 +194,60 @@ export async function dbSeedIfEmpty(clerkProgram, clerkStores) {
     for (const k of Object.keys(clerkStores)) await dbSaveStore(k, clerkStores[k]);
   }
   _seeded = true;
+}
+
+/* ---------------- register (inbound POS) API keys ---------------- */
+// The key that poswithlogic's register presents to us is stored only as a hash.
+function keyHash(raw) { return crypto.createHash("sha256").update(String(raw || "")).digest("hex"); }
+export async function dbSetRegKey(email, rawKey) {
+  if (!sql) return;
+  await ensureSchema();
+  await sql`UPDATE shuk_stores SET reg_key_hash = ${keyHash(rawKey)}, updated_at = now() WHERE email = ${String(email).toLowerCase()}`;
+}
+export async function dbStoreEmailByRegKey(rawKey) {
+  if (!sql || !rawKey) return null;
+  await ensureSchema();
+  const rows = await sql`SELECT email FROM shuk_stores WHERE reg_key_hash = ${keyHash(rawKey)} LIMIT 1`;
+  return rows[0] ? rows[0].email : null;
+}
+
+/* ---------------- physical card mapping ---------------- */
+export async function dbFindCard(cardNumber) {
+  if (!sql || !cardNumber) return null;
+  await ensureSchema();
+  const rows = await sql`SELECT email, account_id FROM shuk_cards WHERE card_number = ${String(cardNumber)}`;
+  return rows[0] ? { email: rows[0].email, accountId: rows[0].account_id } : null;
+}
+export async function dbLinkCard(cardNumber, email, accountId) {
+  if (!sql) return;
+  await ensureSchema();
+  await sql`INSERT INTO shuk_cards (card_number, email, account_id)
+    VALUES (${String(cardNumber)}, ${String(email).toLowerCase()}, ${String(accountId)})
+    ON CONFLICT (card_number) DO UPDATE SET email = EXCLUDED.email, account_id = EXCLUDED.account_id`;
+}
+
+/* ---------------- register transaction log (for Void) ---------------- */
+export async function dbCreatePosTxn(t) {
+  if (!sql) return null;
+  await ensureSchema();
+  const rows = await sql`INSERT INTO shuk_pos_txns
+      (store_email, card_number, account_id, amount_cents, fee_cents, points, sale_id, register, status)
+    VALUES (${t.storeEmail || ""}, ${t.cardNumber || ""}, ${t.accountId || ""}, ${t.amountCents || 0},
+            ${t.feeCents || 0}, ${t.points || 0}, ${t.saleId || ""}, ${t.register || ""}, 'approved')
+    RETURNING id`;
+  return rows[0] ? Number(rows[0].id) : null;
+}
+export async function dbGetPosTxn(id) {
+  if (!sql) return null;
+  await ensureSchema();
+  const rows = await sql`SELECT * FROM shuk_pos_txns WHERE id = ${Number(id)}`;
+  if (!rows[0]) return null;
+  const r = rows[0];
+  return { id: Number(r.id), storeEmail: r.store_email, cardNumber: r.card_number, accountId: r.account_id,
+    amountCents: r.amount_cents, feeCents: r.fee_cents, points: r.points, saleId: r.sale_id, register: r.register, status: r.status };
+}
+export async function dbSetPosTxnStatus(id, status) {
+  if (!sql) return;
+  await ensureSchema();
+  await sql`UPDATE shuk_pos_txns SET status = ${status} WHERE id = ${Number(id)}`;
 }

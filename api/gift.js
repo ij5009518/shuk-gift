@@ -2,7 +2,8 @@
 // accounts (one per customer) with the banking provider. No provider names exposed.
 // Config + store registry persisted in Postgres (see db.js); per-user flags in Clerk.
 import crypto from "crypto";
-import { dbReady, dbGetProgram, dbSaveProgram, dbListStores, dbSaveStore, dbDeleteStore, dbSeedIfEmpty } from "./db.js";
+import { dbReady, dbGetProgram, dbSaveProgram, dbListStores, dbSaveStore, dbDeleteStore, dbSeedIfEmpty,
+  dbSetRegKey, dbStoreEmailByRegKey, dbFindCard, dbLinkCard, dbCreatePosTxn, dbGetPosTxn, dbSetPosTxnStatus } from "./db.js";
 const IB = process.env.INCREASE_BASE_URL || "https://sandbox.increase.com";
 const IK = process.env.INCREASE_API_KEY;
 
@@ -342,9 +343,17 @@ export default async function handler(req, res) {
   try { body = typeof req.body === "object" && req.body ? req.body : JSON.parse(req.body || "{}"); } catch {}
   const action = body.action || "bootstrap";
 
-  // ---- Auth (Clerk) ----
+  // ---- Inbound POS "Gift Cards API" (poswithlogic register calls us) ----
+  // Routed here by vercel.json rewrites; authenticated by an API key we issue,
+  // NOT by a Clerk session. regOp is set only for these register requests.
+  const regOp = String((req.query && (req.query.__reg || req.query.__REG)) || "").toLowerCase();
+  const isReg = regOp === "cart" || regOp === "quote" || regOp === "void";
+
+  // ---- Auth (Clerk) — skipped for register (API-key) requests ----
   let email = null, name = null, clerk = null, meUser = null;
-  if (secret) {
+  if (isReg) {
+    // API-key auth is validated inside the register block below.
+  } else if (secret) {
     const auth = req.headers.authorization || "";
     const tok = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     if (!tok) return res.status(200).json({ needsAuth: true });
@@ -361,7 +370,7 @@ export default async function handler(req, res) {
   } else {
     return res.status(200).json({ error: "Sign-in not configured." });
   }
-  if (!email) return res.status(200).json({ error: "No email on account." });
+  if (!email && !isReg) return res.status(200).json({ error: "No email on account." });
   const emLower = (email || "").toLowerCase();
   const isAdmin = adminList().includes(emLower);
   // isStore / role are finalized below, after the admin's store registry loads.
@@ -435,6 +444,113 @@ export default async function handler(req, res) {
     const role = isAdmin ? "admin" : isStore ? "store" : "customer";
     // A store's checkout awards that store's own rate; otherwise the global default.
     const effRewards = (opEmail) => { const s = stores[(opEmail || "").toLowerCase()]; return (s && s.rewardsPercent != null) ? s.rewardsPercent : program.rewardsPercent; };
+
+    // ================= Inbound Gift Cards API (poswithlogic register -> us) =================
+    // Implements the vendor's OpenAPI: POST cart/quote (preview), cart (charge), {id}/Void.
+    // Auth: a per-store API key we issue (X-API-Key or Basic username:apikey), or a
+    // platform-level POS_INBOUND_KEY env var. Money moves exactly like `checkout`.
+    if (isReg) {
+      const wrap = (result, ok = true, errorMessage = null) => res.status(200).json({ result, isOk: ok, errorMessage });
+      // 1) Authenticate the register.
+      let apiKey = req.headers["x-api-key"] || "";
+      if (!apiKey) {
+        const a = req.headers.authorization || "";
+        if (/^Basic /i.test(a)) { try { const dec = Buffer.from(a.slice(6), "base64").toString("utf8"); const i = dec.indexOf(":"); apiKey = i >= 0 ? dec.slice(i + 1) : dec; } catch {} }
+      }
+      let regStoreEmail = null;
+      if (apiKey && usingDb) { try { regStoreEmail = await dbStoreEmailByRegKey(apiKey); } catch {} }
+      const platformKey = process.env.POS_INBOUND_KEY || "";
+      if (!regStoreEmail && !(platformKey && apiKey === platformKey)) return res.status(401).json({ result: null, isOk: false, errorMessage: "Invalid API key." });
+      const tagStore = regStoreEmail || "platform";
+
+      // 2) Void path.
+      if (regOp === "void") {
+        const id = Number((req.query && req.query.__id) || body.transactionId || 0);
+        if (!id) return wrap(null, false, "transactionId is required.");
+        const tx = usingDb ? await dbGetPosTxn(id) : null;
+        if (!tx) return wrap(null, false, "Transaction not found.");
+        if (regStoreEmail && tx.storeEmail !== regStoreEmail && tx.storeEmail !== "platform") return wrap(null, false, "Not authorized for this transaction.");
+        if (tx.status === "voided") return wrap("AlreadyVoided", true);
+        // Refund the card.
+        try {
+          const r = await inc("/account_transfers", "POST", { account_id: opId, destination_account_id: tx.accountId, amount: tx.amountCents, description: "Void|" + id });
+          if (r && r.status === "pending_approval" && r.id) { try { await inc("/account_transfers/" + r.id + "/approve", "POST"); } catch {} }
+        } catch (e) { return wrap(null, false, "Void failed: " + String((e && e.message) || e).slice(0, 120)); }
+        // Claw back the store settlement.
+        if (tx.storeEmail && tx.storeEmail !== "platform" && (tx.amountCents - tx.feeCents) > 0) {
+          try { const sa = await ensureStoreAcct(tx.storeEmail); const s2 = await inc("/account_transfers", "POST", { account_id: sa.id, destination_account_id: opId, amount: tx.amountCents - tx.feeCents, description: "VoidSettle|" + id }); if (s2 && s2.status === "pending_approval" && s2.id) { try { await inc("/account_transfers/" + s2.id + "/approve", "POST"); } catch {} } } catch {}
+        }
+        // Reverse loyalty points.
+        if (tx.points > 0) {
+          try { const ca = all.find(a => a.id === tx.accountId); const em = ca && String(ca.name || "").startsWith("Gift:") ? ca.name.slice(5) : null; if (em) { const pts = await ensurePoints(em); const p2 = await inc("/account_transfers", "POST", { account_id: pts.id, destination_account_id: opId, amount: tx.points, description: "VoidPoints|" + id }); if (p2 && p2.status === "pending_approval" && p2.id) { try { await inc("/account_transfers/" + p2.id + "/approve", "POST"); } catch {} } } } catch {}
+        }
+        await dbSetPosTxnStatus(id, "voided");
+        return wrap("Voided", true);
+      }
+
+      // 3) Resolve the card -> a gift account.
+      const cardNum = String(body.cardNumber || "").replace(/\s+/g, "");
+      if (!cardNum) return wrap(null, false, "cardNumber is required.");
+      let acctId = null, custEmail = null;
+      const mapped = usingDb ? await dbFindCard(cardNum) : null;
+      if (mapped) { acctId = mapped.accountId; custEmail = mapped.email; }
+      else { const a = findByCardNumber(cardNum); if (a) { acctId = a.id; custEmail = String(a.name || "").startsWith("Gift:") ? a.name.slice(5) : null; } }
+      if (!acctId) return wrap(null, false, "Card not recognized.");
+
+      // 4) Compute the approvable amount.
+      const bal = await balance(acctId);
+      const lines = Array.isArray(body.lines) ? body.lines : [];
+      const requestedDollars = lines.length ? lines.reduce((s, l) => s + (Number(l.total) || 0), 0) : (Number(body.maxCharge) || 0);
+      const reqCents = Math.round(requestedDollars * 100);
+      const capCents = body.maxCharge != null ? Math.round(Number(body.maxCharge) * 100) : Infinity;
+      const acceptPartial = !!body.acceptPartial;
+      let approvedCents = Math.max(0, Math.min(bal, reqCents, capCents));
+      let outcome;
+      if (reqCents <= 0) { approvedCents = 0; outcome = "Declined"; }
+      else if (approvedCents >= reqCents) { outcome = "Approved"; }
+      else if (approvedCents > 0 && acceptPartial) { outcome = "PartiallyApproved"; }
+      else { approvedCents = 0; outcome = "Declined"; }
+
+      // 5) Allocate the approved amount across the cart lines.
+      let pool = approvedCents;
+      const resLines = lines.map(l => {
+        const lineCents = Math.round((Number(l.total) || 0) * 100);
+        const appl = Math.max(0, Math.min(lineCents, pool)); pool -= appl;
+        return { lineId: l.lineId || null, approved: appl > 0, requestedAmount: lineCents / 100, approvedAmount: appl / 100, reason: appl >= lineCents ? null : (appl > 0 ? "partial" : "insufficient balance"), productSku: l.code || null, categoryName: null, draws: [], mainBalanceAmount: appl / 100 };
+      });
+
+      // 6) If this is the real charge, move the money (like `checkout`) and log it.
+      let txnId = null, feeCents = 0, points = 0;
+      if (regOp === "cart" && approvedCents > 0) {
+        const t = await inc("/account_transfers", "POST", { account_id: acctId, destination_account_id: opId, amount: approvedCents, description: "SALE|" + tagStore });
+        if (t && t.status === "pending_approval" && t.id) { try { await inc("/account_transfers/" + t.id + "/approve", "POST"); } catch {} }
+        if (regStoreEmail && stores[regStoreEmail]) {
+          try {
+            const feePct = Number(stores[regStoreEmail].feePercent) || 0;
+            feeCents = Math.round(approvedCents * feePct / 100);
+            const netCents = approvedCents - feeCents;
+            if (netCents > 0) { const sa = await ensureStoreAcct(regStoreEmail); const s2 = await inc("/account_transfers", "POST", { account_id: opId, destination_account_id: sa.id, amount: netCents, description: "Settlement|" + regStoreEmail }); if (s2 && s2.status === "pending_approval" && s2.id) { try { await inc("/account_transfers/" + s2.id + "/approve", "POST"); } catch {} } }
+          } catch {}
+        }
+        try {
+          if (custEmail) {
+            const rp = (regStoreEmail && stores[regStoreEmail] && stores[regStoreEmail].rewardsPercent != null) ? stores[regStoreEmail].rewardsPercent : program.rewardsPercent;
+            points = Math.floor((approvedCents / 100) * rp);
+            if (points > 0) { const pts = await ensurePoints(custEmail); await inc("/simulations/interest_payments", "POST", { account_id: pts.id, amount: points }); }
+          }
+        } catch {}
+        if (usingDb) { try { txnId = await dbCreatePosTxn({ storeEmail: tagStore, cardNumber: cardNum, accountId: acctId, amountCents: approvedCents, feeCents, points, saleId: body.saleId || "", register: body.register || "" }); } catch {} }
+      }
+
+      const dto = {
+        transactionId: txnId, requestedTotal: reqCents / 100, approvedTotal: approvedCents / 100,
+        amountApproved: approvedCents / 100, remainingBalance: (bal - approvedCents) / 100, outcome,
+        lines: resLines, appliedProfileIds: [], allowances: [],
+      };
+      return wrap(dto, true);
+    }
+    // =======================================================================================
+
     // Sales are tagged in the ledger description as "SALE|<storeEmail>" so every
     // redemption can be attributed back to the store that rang it up.
     const saleTag = () => "SALE|" + (isStore ? emLower : "platform");
@@ -922,6 +1038,36 @@ export default async function handler(req, res) {
       catch (e) { return res.status(200).json({ error: "Could not save: " + String((e && e.message) || e).slice(0, 120) }); }
       const out = Object.keys(reg).map(k => publicStore({ email: k, ...cleanStore(reg[k], k) })).sort((a, b) => a.name.localeCompare(b.name));
       return res.status(200).json({ ok: true, stores: out, store: publicStore({ email: target, ...cleanStore(reg[target], target) }) });
+    }
+
+    if (action === "genRegKey") {
+      // Admin: mint the API key that a store's register (poswithlogic) uses to call us.
+      // Shown once; only its hash is stored. Send this key + the endpoint to poswithlogic.
+      if (!isAdmin) return res.status(200).json({ error: "Platform admin only." });
+      if (!usingDb) return res.status(200).json({ error: "Connect the database first." });
+      const target = String(body.email || "").trim().toLowerCase();
+      if (!/.+@.+\..+/.test(target)) return res.status(200).json({ error: "Pick a store." });
+      const key = "sg_" + crypto.randomBytes(20).toString("hex");
+      try { await dbSetRegKey(target, key); }
+      catch (e) { return res.status(200).json({ error: "Could not save key: " + String((e && e.message) || e).slice(0, 120) }); }
+      const proto = (req.headers["x-forwarded-proto"] || "https");
+      const host = req.headers.host || "shuk-gift.vercel.app";
+      return res.status(200).json({ ok: true, key, endpoint: proto + "://" + host + "/api/Transactions" });
+    }
+
+    if (action === "linkCard") {
+      // Operator: map a physical card number (e.g. a 12-digit barcode) to a customer,
+      // so the register can charge it by that number. Creates the gift account if needed.
+      if (!isOperator) return res.status(200).json({ error: "Store access only." });
+      if (!usingDb) return res.status(200).json({ error: "Connect the database first." });
+      const cardNumber = String(body.cardNumber || "").replace(/\s+/g, "");
+      const custEmail = String(body.email || "").trim().toLowerCase();
+      if (!cardNumber) return res.status(200).json({ error: "Enter a card number." });
+      if (!/.+@.+\..+/.test(custEmail)) return res.status(200).json({ error: "Enter the customer email." });
+      const card = await ensureCard(custEmail);
+      try { await dbLinkCard(cardNumber, custEmail, card.id); }
+      catch (e) { return res.status(200).json({ error: "Could not link card: " + String((e && e.message) || e).slice(0, 120) }); }
+      return res.status(200).json({ ok: true, cardNumber, email: custEmail });
     }
 
     if (action === "verifyCard") {
