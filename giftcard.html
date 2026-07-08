@@ -605,11 +605,14 @@
   function openPos(store){
     const cur=store||{};
     const adminTarget = ME.role==="admin" && cur.email ? cur.email : null;
-    const {el,close}=sheet('<h3>Connect POS / terminal</h3><p class="sub">Connect '+(cur.name?esc(cur.name):"this store")+'’s point-of-sale so each redemption records there.</p>'+
+    const {el,close}=sheet('<h3>POS / register setup</h3><p class="sub">Set up '+(cur.name?esc(cur.name):"this store")+'’s register to charge Shuk Gift cards.</p>'+
+      '<label class="flabel" style="font-weight:800">Store / Location ID <span style="color:#0e9f6e">— routes charges to this store</span></label>'+
+      '<input class="fld" id="pvLoc" value="'+escAttr(cur.posLocationId||"")+'" placeholder="e.g. LOC-5567 — must match poswithlogic’s ID" style="border-color:#0e9f6e" />'+
+      '<p class="note" style="margin:2px 0 12px">poswithlogic sends this ID with every charge so we credit the right store. Enter the exact ID they use for this store, then press Save below.</p>'+
+      '<div class="dt" style="font-weight:700;margin:8px 0 6px;border-top:1px solid #ececec;padding-top:10px">Outbound connector (optional — only for POS types we push sales to)</div>'+
       '<label class="flabel">POS type</label><select class="fld" id="pvProv">'+POS_OPTS.map(p=>'<option value="'+p[0]+'"'+(cur.posProvider===p[0]?" selected":"")+'>'+p[1]+'</option>').join("")+'</select>'+
       '<label class="flabel">API base URL (optional)</label><input class="fld" id="pvBase" value="'+escAttr(cur.posBaseUrl||"")+'" placeholder="e.g. https://api.poswithlogic.dev" />'+
       '<label class="flabel">API key'+(cur.posConnected?(" — saved •••• "+esc(cur.posKeyLast4||"")+", leave blank to keep"):"")+'</label><input class="fld" id="pvKey" type="password" autocomplete="off" placeholder="Paste the store’s POS API key" />'+
-      '<label class="flabel">Location / merchant ID (optional)</label><input class="fld" id="pvLoc" value="'+escAttr(cur.posLocationId||"")+'" placeholder="If your POS needs it" />'+
       '<div id="pvMsg" class="note" style="margin:2px 0 8px;min-height:14px"></div>'+
       '<div style="display:flex;gap:8px"><button class="btn sub" id="pvTest" style="flex:1">Test connection</button><button class="btn pri" id="pvSave" style="flex:1">Save</button></div>'+
       (cur.posConnected?'<button class="btn sub" id="pvDisc" style="width:100%;margin-top:8px;color:#b91c1c">Disconnect POS</button>':'')+
