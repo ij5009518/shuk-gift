@@ -461,6 +461,17 @@ export default async function handler(req, res) {
       if (apiKey && usingDb) { try { regStoreEmail = await dbStoreEmailByRegKey(apiKey); } catch {} }
       const platformKey = process.env.POS_INBOUND_KEY || "";
       if (!regStoreEmail && !(platformKey && apiKey === platformKey)) return res.status(401).json({ result: null, isOk: false, errorMessage: "Invalid API key." });
+      // Store/location ID from the request header (poswithlogic sends it per charge).
+      // With a single master key this identifies which store rang the sale; we match
+      // it to a store's email or its saved POS location/merchant ID. Header wins when
+      // it resolves, so one key can serve every store.
+      let locHdr = String(req.headers["x-store-id"] || req.headers["x-location-id"] || req.headers["x-store"] || req.headers["x-location"] || "").trim().toLowerCase();
+      if (locHdr) {
+        for (const em of Object.keys(stores)) {
+          const s = stores[em] || {};
+          if (em === locHdr || String((s.pos && s.pos.locationId) || "").trim().toLowerCase() === locHdr) { regStoreEmail = em; break; }
+        }
+      }
       const tagStore = regStoreEmail || "platform";
 
       // 2) Void path.
